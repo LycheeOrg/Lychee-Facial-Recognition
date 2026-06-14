@@ -5,10 +5,16 @@ on:
     branches:
       - master
     paths:
+      - 'CICD.yaml'
       - '**/*.py'
+      - 'project.toml'
+      - 'uv.lock'
   pull_request:
     paths:
+      - 'CICD.yaml'
       - '**/*.py'
+      - 'project.toml'
+      - 'uv.lock'
   workflow_dispatch:
 
 # Declare default permissions as read only.
