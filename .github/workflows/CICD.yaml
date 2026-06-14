@@ -7,14 +7,14 @@ on:
     paths:
       - 'CICD.yaml'
       - '**/*.py'
-      - 'project.toml'
+      - 'pyproject.toml'
       - 'uv.lock'
       - 'Dockerfile'
   pull_request:
     paths:
       - 'CICD.yaml'
       - '**/*.py'
-      - 'project.toml'
+      - 'pyproject.toml'
       - 'uv.lock'
       - 'Dockerfile'
   workflow_dispatch:
