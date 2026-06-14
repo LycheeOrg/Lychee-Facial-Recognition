@@ -19,10 +19,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ !contains(github.ref, 'master') && !startsWith(github.ref, 'refs/tags/') }}
 
-defaults:
-  run:
-    working-directory: ai-vision-service/face-recognition
-
 jobs:
   # ---------------------------------------------------------------------------
   # Lint – formatting and style
