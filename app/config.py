@@ -4,10 +4,57 @@ All settings are loaded from environment variables prefixed with ``VISION_FACE_`
 Example: the ``api_key`` field maps to the ``VISION_FACE_API_KEY`` env var.
 """
 
+import sys
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_RED = "\033[31m"
+_YELLOW = "\033[33m"
+_BOLD = "\033[1m"
+_DIM = "\033[2m"
+_RESET = "\033[0m"
+
+
+def _pretty_config_error(exc: ValidationError) -> None:
+    missing: list[str] = []
+    invalid: list[tuple[str, str]] = []
+
+    for error in exc.errors():
+        field = str(error["loc"][0])
+        env_var = f"VISION_FACE_{field.upper()}"
+        if error["type"] == "missing":
+            missing.append(env_var)
+        else:
+            invalid.append((env_var, error["msg"]))
+
+    lines = [
+        "",
+        f"{_BOLD}{_RED}✗  AI Vision Service failed to start — invalid configuration{_RESET}",
+        "",
+    ]
+
+    if missing:
+        lines.append(f"{_YELLOW}Required environment variables are not set:{_RESET}")
+        for var in missing:
+            lines.append(f"  {_BOLD}{var}{_RESET}")
+        lines.append("")
+
+    if invalid:
+        lines.append(f"{_YELLOW}Environment variables have invalid values:{_RESET}")
+        for var, msg in invalid:
+            lines.append(f"  {_BOLD}{var}{_RESET}  {_DIM}— {msg}{_RESET}")
+        lines.append("")
+
+    lines += [
+        f"{_DIM}All settings use the VISION_FACE_ prefix.",
+        f"Example:  VISION_FACE_LYCHEE_API_URL=http://lychee  VISION_FACE_API_KEY=secret{_RESET}",
+        "",
+    ]
+
+    print("\n".join(lines), file=sys.stderr)
 
 
 class AppSettings(BaseSettings):
@@ -155,4 +202,8 @@ def get_settings() -> AppSettings:
     Override ``app.dependency_overrides[get_settings]`` in tests to inject
     mock settings without touching environment variables.
     """
-    return AppSettings()  # ty: ignore
+    try:
+        return AppSettings()  # ty: ignore
+    except ValidationError as exc:
+        _pretty_config_error(exc)
+        raise SystemExit(1) from None
