@@ -137,7 +137,7 @@ jobs:
       - name: Build Docker image (no model bake in CI to save time)
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
         with:
-          context: ai-vision-service/face-recognition
+          context: .
           push: false
           load: true
           tags: lychee-ai-vision:ci
