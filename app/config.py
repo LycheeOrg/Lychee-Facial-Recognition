@@ -150,6 +150,27 @@ class AppSettings(BaseSettings):
     """DBSCAN epsilon (max cosine distance) for face clustering.
     Lower values produce tighter, more homogeneous clusters."""
 
+    # --- Job queue ---
+    queue_backend: str = "database"
+    """Queue backend: ``database`` (SQLite or PostgreSQL, matches ``storage_backend``) or ``redis``."""
+
+    queue_max_size: int = 100
+    """Maximum number of pending jobs in the queue.  Requests that would exceed
+    this limit are rejected with **429 Too Many Requests**."""
+
+    # --- Redis (only when queue_backend = "redis") ---
+    redis_host: str = "localhost"
+    """Redis host."""
+
+    redis_port: int = 6379
+    """Redis port."""
+
+    redis_password: str = ""
+    """Redis password (leave empty for no authentication)."""
+
+    redis_db: int = 0
+    """Redis logical database index."""
+
     # --- Quality filtering ---
     min_face_size_pixels: int = 0
     """Minimum face size in pixels. The longest side of the detected bounding box (width or height)

@@ -16,10 +16,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile
 from fastapi.responses import RedirectResponse
 
-from app.api.dependencies import get_detector, get_store, require_api_key
+from app.api.dependencies import get_detector, get_queue, get_store, require_api_key
 from app.api.schemas import (
     ClusterCallbackPayload,
     ClusterFaceResult,
@@ -36,6 +36,8 @@ from app.api.schemas import (
     HealthResponse,
     MatchResponse,
     MatchResult,
+    QueuePositionResponse,
+    QueueSizeResponse,
     ServiceConfigResponse,
     SuggestionResult,
 )
@@ -48,10 +50,12 @@ if TYPE_CHECKING:
 
     from app.detection.detector import DetectedFace, FaceDetector
     from app.embeddings.store import EmbeddingStore
+    from app.queue.base import JobQueue
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+queue_router = APIRouter(prefix="/queue", tags=["queue"])
 
 
 # ---------------------------------------------------------------------------
@@ -73,7 +77,6 @@ async def root() -> RedirectResponse:
 @router.post("/detect", status_code=202)
 async def detect(
     body: DetectRequest,
-    background_tasks: BackgroundTasks,
     request: Request,
     settings: AppSettings = Depends(get_settings),
     _: None = Depends(require_api_key),
@@ -81,7 +84,8 @@ async def detect(
     """Accept a face-detection job.
 
     Validates the photo path (path-traversal protection), then immediately
-    returns **202 Accepted** and schedules detection as a background task.
+    returns **202 Accepted** and enqueues detection for a background worker.
+    Returns **429 Too Many Requests** when the queue is full.
     Results are POSTed back to Lychee's results endpoint once detection
     completes.
     """
@@ -105,19 +109,16 @@ async def detect(
         )
         raise HTTPException(status_code=400, detail="photo_path does not exist or is not a file")
 
-    detector: FaceDetector = get_detector(request)
-    store: EmbeddingStore = get_store(request)
-    executor: Executor = request.app.state.executor
+    import json
 
-    background_tasks.add_task(
-        _run_detection_job,
-        body.photo_id,
-        resolved,
-        detector,
-        store,
-        executor,
-        settings,
+    queue: JobQueue = get_queue(request)
+    accepted = await queue.enqueue(
+        job_type="detect",
+        photo_id=body.photo_id,
+        payload=json.dumps({"photo_path": str(resolved)}),
     )
+    if not accepted:
+        raise HTTPException(status_code=429, detail="Queue is full — try again later")
 
 
 # ---------------------------------------------------------------------------
@@ -221,26 +222,23 @@ async def export_embeddings(
 
 @router.post("/cluster", status_code=202)
 async def cluster(
-    background_tasks: BackgroundTasks,
     request: Request,
     settings: AppSettings = Depends(get_settings),
     _: None = Depends(require_api_key),
 ) -> None:
     """Run DBSCAN clustering over all stored face embeddings.
 
-    Immediately returns **202 Accepted** and schedules clustering as a background
-    task. Results are POSTed back to Lychee's clustering results endpoint once
+    Immediately returns **202 Accepted** and enqueues clustering for a background
+    worker. Returns **429 Too Many Requests** when the queue is full.
+    Results are POSTed back to Lychee's clustering results endpoint once
     clustering completes.
     """
-    store: EmbeddingStore = get_store(request)
-    executor: Executor = request.app.state.executor
+    import json
 
-    background_tasks.add_task(
-        _run_clustering_job,
-        store,
-        executor,
-        settings,
-    )
+    queue: JobQueue = get_queue(request)
+    accepted = await queue.enqueue(job_type="cluster", photo_id="", payload=json.dumps({}))
+    if not accepted:
+        raise HTTPException(status_code=429, detail="Queue is full — try again later")
 
 
 # ---------------------------------------------------------------------------
@@ -263,6 +261,50 @@ async def health(request: Request) -> HealthResponse:
         model_loaded=detector.is_loaded,
         embedding_count=store.count(),
     )
+
+
+# ---------------------------------------------------------------------------
+# /queue endpoints
+# ---------------------------------------------------------------------------
+
+
+@queue_router.get("")
+async def queue_size(
+    request: Request,
+    _: None = Depends(require_api_key),
+) -> QueueSizeResponse:
+    """Return the number of jobs currently waiting to be processed."""
+    queue: JobQueue = get_queue(request)
+    return QueueSizeResponse(pending=await queue.size())
+
+
+@queue_router.delete("", status_code=204)
+async def queue_purge(
+    request: Request,
+    _: None = Depends(require_api_key),
+) -> None:
+    """Delete all pending jobs from the queue. In-flight jobs are not affected."""
+    queue: JobQueue = get_queue(request)
+    await queue.purge()
+
+
+@queue_router.get("/{photo_id}")
+async def queue_position(
+    photo_id: str,
+    request: Request,
+    _: None = Depends(require_api_key),
+) -> QueuePositionResponse:
+    """Return the position of a photo in the queue.
+
+    - **present** → job is waiting; ``position`` is its 1-based rank among pending jobs.
+      ``position=0`` means the job is currently being processed.
+    - **absent** → job is done (404).
+    """
+    queue: JobQueue = get_queue(request)
+    pos = await queue.position(photo_id)
+    if pos is None:
+        raise HTTPException(status_code=404, detail="Photo not found in queue (already done or never submitted)")
+    return QueuePositionResponse(photo_id=photo_id, position=pos)
 
 
 @router.get("/config")
@@ -602,3 +644,8 @@ def _generate_cross_cluster_suggestions(
                     break
 
     return suggestions
+
+
+# Register queue sub-router after all handlers are defined so FastAPI
+# captures the fully-populated route list.
+router.include_router(queue_router)

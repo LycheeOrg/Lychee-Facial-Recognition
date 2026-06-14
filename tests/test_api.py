@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import io
+import json
 from typing import TYPE_CHECKING
-from unittest.mock import patch
 
 import pytest
 
@@ -12,6 +12,7 @@ from app.detection.detector import DetectedFace
 
 if TYPE_CHECKING:
     from pathlib import Path
+    from unittest.mock import AsyncMock
 
     from fastapi.testclient import TestClient
 
@@ -102,19 +103,34 @@ def test_config_returns_redacted_values(client: TestClient) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_detect_returns_202(client: TestClient, photos_path: Path) -> None:
-    """Valid request to POST /detect must return 202 Accepted."""
+def test_detect_returns_202(client: TestClient, mock_queue: AsyncMock, photos_path: Path) -> None:
+    """Valid request to POST /detect must return 202 Accepted and enqueue a job."""
     photo = photos_path / "photo.jpg"
     photo.touch()
 
-    with patch("app.api.routes._run_detection_job") as mock_job:
-        response = client.post(
-            "/detect",
-            json={"photo_id": "photo-123", "photo_path": "photo.jpg"},
-            headers={"X-API-Key": "test-api-key"},
-        )
+    response = client.post(
+        "/detect",
+        json={"photo_id": "photo-123", "photo_path": "photo.jpg"},
+        headers={"X-API-Key": "test-api-key"},
+    )
     assert response.status_code == 202
-    mock_job.assert_called_once()
+    mock_queue.enqueue.assert_called_once()
+    assert mock_queue.enqueue.call_args.kwargs["job_type"] == "detect"
+    assert mock_queue.enqueue.call_args.kwargs["photo_id"] == "photo-123"
+
+
+def test_detect_returns_429_when_queue_full(client: TestClient, mock_queue: AsyncMock, photos_path: Path) -> None:
+    """POST /detect must return 429 when the queue reports it is full."""
+    photo = photos_path / "photo.jpg"
+    photo.touch()
+    mock_queue.enqueue.return_value = False
+
+    response = client.post(
+        "/detect",
+        json={"photo_id": "photo-123", "photo_path": "photo.jpg"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 429
 
 
 def test_detect_rejects_path_traversal(client: TestClient, tmp_path: Path) -> None:
@@ -138,19 +154,18 @@ def test_detect_rejects_nonexistent_file(client: TestClient) -> None:
     assert response.status_code == 400
 
 
-def test_detect_background_task_called_with_correct_args(client: TestClient, photos_path: Path) -> None:
+def test_detect_enqueues_correct_payload(client: TestClient, mock_queue: AsyncMock, photos_path: Path) -> None:
+    """POST /detect must enqueue the resolved absolute path in the job payload."""
     photo = photos_path / "photo.jpg"
     photo.touch()
 
-    with patch("app.api.routes._run_detection_job") as mock_job:
-        client.post(
-            "/detect",
-            json={"photo_id": "photo-xyz", "photo_path": "photo.jpg"},
-            headers={"X-API-Key": "test-api-key"},
-        )
-        args = mock_job.call_args[0]
-        assert args[0] == "photo-xyz"
-        assert args[1] == photo.resolve()
+    client.post(
+        "/detect",
+        json={"photo_id": "photo-xyz", "photo_path": "photo.jpg"},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    payload = json.loads(mock_queue.enqueue.call_args.kwargs["payload"])
+    assert payload["photo_path"] == str(photo.resolve())
 
 
 # ---------------------------------------------------------------------------

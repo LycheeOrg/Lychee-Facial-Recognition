@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
     from fastapi import FastAPI
+
+    from app.queue.base import JobQueue
 
 # ---------------------------------------------------------------------------
 # Environment / settings
@@ -100,12 +102,27 @@ def mock_store() -> EmbeddingStore:
 
 
 # ---------------------------------------------------------------------------
+# Queue mock
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def mock_queue() -> JobQueue:
+    """Return an async mock :class:`JobQueue` with sensible defaults."""
+    m = AsyncMock()
+    m.size.return_value = 0
+    m.enqueue.return_value = True
+    m.position.return_value = None
+    return m  # type: ignore[return-value]
+
+
+# ---------------------------------------------------------------------------
 # FastAPI test client
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
-def test_app(mock_detector: FaceDetector, mock_store: EmbeddingStore, tmp_path: Any) -> FastAPI:
+def test_app(mock_detector: FaceDetector, mock_store: EmbeddingStore, mock_queue: JobQueue, tmp_path: Any) -> FastAPI:
     """Return a FastAPI app wired with mock state (no real model loaded)."""
 
     @asynccontextmanager
@@ -113,6 +130,7 @@ def test_app(mock_detector: FaceDetector, mock_store: EmbeddingStore, tmp_path: 
         app.state.detector = mock_detector
         app.state.store = mock_store
         app.state.executor = ThreadPoolExecutor(max_workers=1)
+        app.state.queue = mock_queue
         yield
 
     application = create_app(lifespan=_test_lifespan)

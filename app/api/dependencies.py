@@ -16,6 +16,7 @@ from app.config import AppSettings, get_settings
 if TYPE_CHECKING:
     from app.detection.detector import FaceDetector
     from app.embeddings.store import EmbeddingStore
+    from app.queue.base import JobQueue
 
 
 async def require_api_key(
@@ -40,3 +41,8 @@ def get_detector(request: Request) -> FaceDetector:
 def get_store(request: Request) -> EmbeddingStore:
     """Return the :class:`EmbeddingStore` stored in ``app.state``."""
     return request.app.state.store
+
+
+def get_queue(request: Request) -> JobQueue:
+    """Return the :class:`JobQueue` stored in ``app.state``."""
+    return request.app.state.queue

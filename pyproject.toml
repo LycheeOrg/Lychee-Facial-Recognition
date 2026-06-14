@@ -28,6 +28,7 @@ dependencies = [
 
 [project.optional-dependencies]
 gpu = ["tensorflow[and-cuda]"]
+redis = ["redis>=5.0"]
 
 [dependency-groups]
 dev = [

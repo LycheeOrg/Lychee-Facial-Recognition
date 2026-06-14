@@ -26,6 +26,7 @@ claiming via a REST API consumed by the Lychee PHP backend.
 | Face crop generation | Pillow |
 | Embedding clustering | scikit-learn (DBSCAN) |
 | Embedding storage | SQLite + sqlite-vec (default) / PostgreSQL + pgvector |
+| Job queue | SQLite / PostgreSQL (default) / Redis |
 | HTTP client (callbacks) | httpx |
 | Config | Pydantic BaseSettings |
 
@@ -39,8 +40,8 @@ ai-vision-service/
 │   ├── main.py            # FastAPI app factory & lifespan handler
 │   ├── api/
 │   │   ├── __init__.py
-│   │   ├── dependencies.py  # API key auth dependency
-│   │   ├── routes.py        # /detect, /match, /health
+│   │   ├── dependencies.py  # API key auth + queue dependency
+│   │   ├── routes.py        # /detect, /match, /cluster, /queue, /health
 │   │   └── schemas.py       # Pydantic request/response models
 │   ├── detection/
 │   │   ├── __init__.py
@@ -51,6 +52,13 @@ ai-vision-service/
 │   │   ├── store.py         # Abstract EmbeddingStore protocol
 │   │   ├── sqlite_store.py  # SQLite + sqlite-vec implementation
 │   │   └── pgvector_store.py # PostgreSQL + pgvector implementation
+│   ├── queue/
+│   │   ├── __init__.py
+│   │   ├── base.py          # Job dataclass + JobQueue protocol
+│   │   ├── db_queue.py      # SQLite / PostgreSQL backends
+│   │   ├── redis_queue.py   # Redis backend
+│   │   ├── factory.py       # create_queue(settings)
+│   │   └── worker.py        # Async consumer loop
 │   ├── clustering/
 │   │   ├── __init__.py
 │   │   └── clusterer.py   # DBSCAN clustering
@@ -58,38 +66,106 @@ ai-vision-service/
 │       ├── __init__.py
 │       └── matcher.py     # Selfie similarity matching
 ├── tests/
-│   └── __init__.py
+│   ├── conftest.py
+│   ├── test_api.py
+│   ├── test_queue.py        # SQLiteJobQueue unit tests
+│   ├── test_queue_api.py    # /queue endpoint tests
+│   └── ...
 ├── Dockerfile
+├── Makefile
 ├── pyproject.toml
 └── README.md
 ```
 
 ## Environment variables
 
-All variables are prefixed `VISION_FACE_`.
+All variables are prefixed `VISION_FACE_`. Copy `.env.example` to `.env` and fill in the required values. Missing required variables produce a formatted error message at startup instead of a raw traceback.
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `VISION_FACE_LYCHEE_API_URL` | Yes | — | Lychee base URL for callbacks |
-| `VISION_FACE_API_KEY` | Yes | — | Shared API key: validated on inbound requests from Lychee, and sent on outbound callbacks to Lychee |
-| `VISION_FACE_VERIFY_SSL` | No | `true` | Verify SSL certificates when making callbacks to Lychee. Set to `false` for dev environments with self-signed certificates |
-| `VISION_FACE_MODEL_NAME` | No | `ArcFace` | DeepFace recognition model |
-| `VISION_FACE_DETECTOR_BACKEND` | No | `retinaface` | DeepFace detector backend (`retinaface`, `mtcnn`, `opencv`, `ssd`) |
-| `VISION_FACE_DETECTION_THRESHOLD` | No | `0.5` | Confidence filter for detected faces |
-| `VISION_FACE_MATCH_THRESHOLD` | No | `0.5` | Cosine-similarity cutoff for selfie matching |
-| `VISION_FACE_RESCAN_IOU_THRESHOLD` | No | `0.5` | IoU threshold for bounding-box matching on re-scan |
-| `VISION_FACE_MAX_FACES_PER_PHOTO` | No | `10` | Maximum faces included in a callback payload |
-| `VISION_FACE_THREAD_POOL_SIZE` | No | `1` | Inference thread-pool size |
-| `VISION_FACE_STORAGE_BACKEND` | No | `sqlite` | `sqlite` or `pgvector` |
-| `VISION_FACE_STORAGE_PATH` | No | `/data/embeddings` | SQLite DB directory |
-| `VISION_FACE_PG_HOST` | No* | `localhost` | PostgreSQL host (*required with pgvector) |
-| `VISION_FACE_PG_PORT` | No | `5432` | PostgreSQL port |
-| `VISION_FACE_PG_DATABASE` | No* | `ai_vision` | PostgreSQL database (*required with pgvector) |
-| `VISION_FACE_PG_USER` | No* | `ai_vision` | PostgreSQL user (*required with pgvector) |
-| `VISION_FACE_PG_PASSWORD` | No* | `` | PostgreSQL password (*required with pgvector) |
-| `VISION_FACE_PHOTOS_PATH` | No | `/data/photos` | Shared volume mount for photo files |
-| `VISION_FACE_WORKERS` | No | `1` | Number of Uvicorn worker processes |
-| `VISION_FACE_LOG_LEVEL` | No | `info` | Log level |
+### Required
+
+| Variable | Description |
+|----------|-------------|
+| `VISION_FACE_LYCHEE_API_URL` | Lychee base URL for callbacks (no trailing slash) |
+| `VISION_FACE_API_KEY` | Shared API key: validated on inbound requests from Lychee and sent on outbound callbacks |
+
+### Connection
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VISION_FACE_VERIFY_SSL` | `true` | Verify SSL certificates on Lychee callbacks. Set to `false` for self-signed certs |
+| `VISION_FACE_SKIP_LYCHEE_CHECK` | `false` | Skip the Lychee connectivity check at startup (useful for local dev) |
+
+### Model
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VISION_FACE_MODEL_NAME` | `ArcFace` | DeepFace recognition model |
+| `VISION_FACE_DETECTOR_BACKEND` | `retinaface` | DeepFace detector backend (`retinaface`, `mtcnn`, `opencv`, `ssd`) |
+| `VISION_FACE_MODEL_ROOT` | `/root/.deepface` | Root directory for DeepFace model weights (`DEEPFACE_HOME`) |
+
+### Detection & matching
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VISION_FACE_DETECTION_THRESHOLD` | `0.5` | Bounding-box confidence filter |
+| `VISION_FACE_MATCH_THRESHOLD` | `0.5` | Cosine-similarity cutoff for selfie matching and suggestions |
+| `VISION_FACE_RESCAN_IOU_THRESHOLD` | `0.5` | IoU threshold for bounding-box matching on re-scan |
+| `VISION_FACE_MAX_FACES_PER_PHOTO` | `10` | Maximum faces included in a callback payload |
+| `VISION_FACE_MIN_FACE_SIZE_PIXELS` | `0` | Minimum face size in pixels; `0` = disabled |
+| `VISION_FACE_BLUR_THRESHOLD` | `0.5` | Laplacian variance threshold; blurry faces below this are discarded |
+| `VISION_FACE_CLUSTER_EPS` | `0.6` | DBSCAN epsilon (max cosine distance) for face clustering |
+
+### Storage
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VISION_FACE_STORAGE_BACKEND` | `sqlite` | `sqlite` or `pgvector` |
+| `VISION_FACE_STORAGE_PATH` | `/data/embeddings` | SQLite DB directory |
+| `VISION_FACE_PG_HOST` | `localhost` | PostgreSQL host (pgvector only) |
+| `VISION_FACE_PG_PORT` | `5432` | PostgreSQL port |
+| `VISION_FACE_PG_DATABASE` | `ai_vision` | PostgreSQL database |
+| `VISION_FACE_PG_USER` | `ai_vision` | PostgreSQL user |
+| `VISION_FACE_PG_PASSWORD` | `` | PostgreSQL password |
+| `VISION_FACE_PHOTOS_PATH` | `/data/photos` | Shared Docker volume mount for photo files |
+
+### Job queue
+
+Detection and clustering jobs are processed asynchronously via a persistent queue shared across all worker processes. Requests that arrive when the queue is full receive **429 Too Many Requests**.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VISION_FACE_QUEUE_BACKEND` | `database` | `database` (uses `STORAGE_BACKEND`) or `redis` |
+| `VISION_FACE_QUEUE_MAX_SIZE` | `100` | Maximum number of pending jobs |
+| `VISION_FACE_REDIS_HOST` | `localhost` | Redis host (redis backend only) |
+| `VISION_FACE_REDIS_PORT` | `6379` | Redis port |
+| `VISION_FACE_REDIS_PASSWORD` | `` | Redis password |
+| `VISION_FACE_REDIS_DB` | `0` | Redis logical database index |
+
+The Redis backend requires the optional `redis` extra: `uv sync --extra redis`.
+
+### Concurrency
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VISION_FACE_THREAD_POOL_SIZE` | `1` | Inference threads (also sets number of queue worker tasks) |
+| `VISION_FACE_WORKERS` | `1` | Uvicorn worker processes |
+
+## API endpoints
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| `POST` | `/detect` | Yes | Enqueue a face-detection job; returns 202 or 429 if queue full |
+| `POST` | `/match` | Yes | Synchronous selfie-to-face similarity search |
+| `POST` | `/cluster` | Yes | Enqueue a DBSCAN clustering job; returns 202 or 429 if queue full |
+| `DELETE` | `/embeddings` | Yes | Delete face embeddings by Lychee Face ID |
+| `GET` | `/embeddings/export` | Yes | Export all embeddings with metadata |
+| `GET` | `/queue` | Yes | Number of jobs currently pending |
+| `DELETE` | `/queue` | Yes | Purge all pending jobs (in-flight jobs are unaffected) |
+| `GET` | `/queue/{photo_id}` | Yes | Position of a photo in the queue (`position=0` = processing, 404 = done) |
+| `GET` | `/health` | No | Service health and embedding count |
+| `GET` | `/config` | Yes | Current runtime configuration (secrets redacted) |
+
+Interactive docs are available at `/docs` when the service is running.
 
 ## Development
 
@@ -102,53 +178,44 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install all dependencies (including dev)
 uv sync
 
-# Configure .env file (create or edit .env in this directory)
-# Minimum required variables:
-# VISION_FACE_LYCHEE_API_URL=https://lychee.test
-# VISION_FACE_API_KEY=changeme
-# VISION_FACE_VERIFY_SSL=false
-# VISION_FACE_PHOTOS_PATH=../../public/uploads
+# Copy and edit the env file — at minimum set LYCHEE_API_URL and API_KEY
+cp .env.example .env
 ```
 
-### Running locally
+### Makefile
 
 ```bash
-# Using uv run (recommended)
-uv run python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+make lint          # ruff check + ruff format --check + ty check
+make format        # ruff format + ruff check --fix (auto-fix)
+make test          # pytest
+make run           # uvicorn with --reload (local dev)
+make docker-build  # docker build -t lychee-ai-vision .
+make docker-run    # docker run --env-file .env ...
 ```
 
 The service will be available at http://localhost:8000
-- API docs: http://localhost:8000/docs
+- Interactive API docs: http://localhost:8000/docs
 - Health check: http://localhost:8000/health
 
-### Linting and testing
+### Running tests with coverage
 
 ```bash
-# Lint and format
-uv run ruff format
-uv run ruff check --fix
-
-# Type check
-uv run ty check
-
-# Run tests
-uv run pytest
-
-# Run tests with coverage
 uv run pytest --cov=app --cov-report=html
 ```
 
 ## Docker
 
 ```bash
-# Build (bakes ArcFace + RetinaFace models into the image – ~500 MB download on first build)
-docker build -t lychee-ai-vision .
+# Build (bakes ArcFace + RetinaFace model weights into the image — ~500 MB on first build)
+make docker-build
 
-# Run
+# Run using .env for configuration
+make docker-run
+
+# Or manually, mounting photo and embedding volumes
 docker run --rm \
-  -e VISION_FACE_LYCHEE_API_URL=http://lychee \
-  -e VISION_FACE_API_KEY=changeme \
-  -v /path/to/photos:/data/photos:ro \
+  --env-file .env \
+  -v /path/to/lychee/photos:/data/photos:ro \
   -v ai-vision-embeddings:/data/embeddings \
   -p 8000:8000 \
   lychee-ai-vision
@@ -169,4 +236,4 @@ docker run --rm \
 
 ---
 
-*Last updated: 2026-04-24*
+*Last updated: 2026-06-14*
