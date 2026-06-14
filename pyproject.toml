@@ -24,11 +24,11 @@ dependencies = [
     "sqlite-vec>=0.1",
     "psycopg2-binary>=2.9",
     "python-multipart>=0.0.32",
+    "redis>=5.0",
 ]
 
 [project.optional-dependencies]
 gpu = ["tensorflow[and-cuda]"]
-redis = ["redis>=5.0"]
 
 [dependency-groups]
 dev = [
