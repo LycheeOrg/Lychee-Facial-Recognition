@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import os
+import typing
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING, Any
@@ -35,6 +36,7 @@ _RESET = "\033[0m"
 
 
 class _ColorFormatter(logging.Formatter):
+    @typing.override
     def formatTime(self, record: logging.LogRecord, datefmt: str | None = None) -> str:
         return f"{_DIM}{super().formatTime(record, datefmt)}{_RESET}"
 
