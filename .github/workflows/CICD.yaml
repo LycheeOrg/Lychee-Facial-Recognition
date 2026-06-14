@@ -9,12 +9,14 @@ on:
       - '**/*.py'
       - 'project.toml'
       - 'uv.lock'
+      - 'Dockerfile'
   pull_request:
     paths:
       - 'CICD.yaml'
       - '**/*.py'
       - 'project.toml'
       - 'uv.lock'
+      - 'Dockerfile'
   workflow_dispatch:
 
 # Declare default permissions as read only.

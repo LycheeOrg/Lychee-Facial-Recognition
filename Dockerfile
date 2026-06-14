@@ -18,7 +18,7 @@ WORKDIR /app
 
 # Install dependencies only (no source code) so layer cache is reused when
 # only application code changes.
-COPY pyproject.toml uv.lock README.md ./
+COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 # Bake ArcFace + RetinaFace model weights into the image at build time.
