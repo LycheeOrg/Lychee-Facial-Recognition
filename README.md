@@ -154,7 +154,7 @@ docker run --rm \
   lychee-ai-vision
 ```
 
-[build-status-shield]: https://img.shields.io/github/actions/workflow/status/LycheeOrg/Lychee-Facial-Recognition/CICD.yml?branch=master
+[build-status-shield]: https://img.shields.io/github/actions/workflow/status/LycheeOrg/Lychee-Facial-Recognition/CICD.yaml?branch=master
 [codecov-shield]: https://codecov.io/gh/LycheeOrg/Lychee-Facial-Recognition/branch/master/graph/badge.svg
 [release-shield]: https://img.shields.io/github/release/LycheeOrg/Lychee-Facial-Recognition.svg
 [license-shield]: https://img.shields.io/github/license/LycheeOrg/Lychee-Facial-Recognition.svg
