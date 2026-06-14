@@ -24,10 +24,10 @@ if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
 
 _LEVEL_COLORS = {
-    logging.DEBUG: "\033[36m",     # cyan
-    logging.INFO: "\033[32m",      # green
-    logging.WARNING: "\033[33m",   # yellow
-    logging.ERROR: "\033[31m",     # red
+    logging.DEBUG: "\033[36m",  # cyan
+    logging.INFO: "\033[32m",  # green
+    logging.WARNING: "\033[33m",  # yellow
+    logging.ERROR: "\033[31m",  # red
     logging.CRITICAL: "\033[35m",  # magenta
 }
 _DIM = "\033[2m"
