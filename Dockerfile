@@ -1,7 +1,9 @@
 # Multi-stage build: keep the runtime image lean.
 
 # ---------------------------------------------------------------------------
-# Stage 1 – builder: install dependencies and bake the model weights.
+# Stage 1 – builder: install dependencies only.
+# Targeted by CI (target: builder) to verify the build without downloading
+# the 300 MB model weights.
 # ---------------------------------------------------------------------------
 FROM python:3.13-slim@sha256:739e7213785e88c0f702dcdc12c0973afcbd606dbf021a589cab77d6b00b579d AS builder
 
@@ -18,12 +20,17 @@ WORKDIR /app
 
 # Install dependencies only (no source code) so layer cache is reused when
 # only application code changes.
-COPY pyproject.toml uv.lock ./
+COPY pyproject.toml uv.lock README.md ./
 RUN uv sync --frozen --no-dev
 
+# ---------------------------------------------------------------------------
+# Stage 2 – baked: add model weights on top of the installed dependencies.
 # Bake ArcFace + RetinaFace model weights into the image at build time.
 # The resulting image starts instantly and works in airgapped environments.
 # Model updates require an image rebuild.
+# ---------------------------------------------------------------------------
+FROM builder AS baked
+
 RUN DEEPFACE_HOME=/root/.deepface uv run python -c \
     "from deepface import DeepFace; \
      import numpy as np; \
@@ -36,15 +43,15 @@ RUN DEEPFACE_HOME=/root/.deepface uv run python -c \
      print('ArcFace + RetinaFace models downloaded.')"
 
 # ---------------------------------------------------------------------------
-# Stage 2 – runtime: copy only what's needed to run.
+# Stage 3 – runtime: copy only what's needed to run.
 # ---------------------------------------------------------------------------
 FROM python:3.13-slim@sha256:739e7213785e88c0f702dcdc12c0973afcbd606dbf021a589cab77d6b00b579d AS runtime
 
 WORKDIR /app
 
-# Copy the pre-built virtualenv and baked model weights from the builder stage.
-COPY --from=builder /app/.venv /app/.venv
-COPY --from=builder /root/.deepface /root/.deepface
+# Copy the pre-built virtualenv and baked model weights from the baked stage.
+COPY --from=baked /app/.venv /app/.venv
+COPY --from=baked /root/.deepface /root/.deepface
 
 # Copy application source.
 COPY app/ ./app/

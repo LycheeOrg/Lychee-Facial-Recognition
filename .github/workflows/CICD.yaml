@@ -5,14 +5,14 @@ on:
     branches:
       - master
     paths:
-      - 'CICD.yaml'
+      - '.github/workflows/CICD.yaml'
       - '**/*.py'
       - 'pyproject.toml'
       - 'uv.lock'
       - 'Dockerfile'
   pull_request:
     paths:
-      - 'CICD.yaml'
+      - '.github/workflows/CICD.yaml'
       - '**/*.py'
       - 'pyproject.toml'
       - 'uv.lock'
