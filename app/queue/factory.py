@@ -46,8 +46,7 @@ def create_queue(settings: AppSettings) -> JobQueue:
             from app.queue.redis_queue import RedisJobQueue
         except ImportError as exc:
             raise ImportError(
-                "The 'redis' package is required for the Redis queue backend. "
-                "Install it with: pip install redis"
+                "The 'redis' package is required for the Redis queue backend. Install it with: pip install redis"
             ) from exc
 
         return RedisJobQueue(

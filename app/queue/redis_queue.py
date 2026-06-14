@@ -5,20 +5,17 @@ Redis hash to track in-flight jobs so that ``position()`` can distinguish
 between "pending", "processing", and "done".
 
 Key layout:
-  queue:jobs            – List of JSON job payloads (FIFO: enqueue=RPUSH, dequeue=LPOP)
-  queue:inflight        – Hash  {job_id -> json} for in-flight tracking
-  queue:counter         – String auto-increment id (INCR)
+  queue:jobs            - List of JSON job payloads (FIFO: enqueue=RPUSH, dequeue=LPOP)
+  queue:inflight        - Hash  {job_id -> json} for in-flight tracking
+  queue:counter         - String auto-increment id (INCR)
 """
 
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from app.queue.base import Job
-
-if TYPE_CHECKING:
-    pass
 
 
 class RedisJobQueue:

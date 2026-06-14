@@ -9,9 +9,9 @@ from typing import Protocol, runtime_checkable
 @dataclass
 class Job:
     id: int
-    job_type: str    # "detect" | "cluster"
-    photo_id: str    # Lychee photo ID, or "" for cluster jobs
-    payload: str     # JSON-encoded job arguments
+    job_type: str  # "detect" | "cluster"
+    photo_id: str  # Lychee photo ID, or "" for cluster jobs
+    payload: str  # JSON-encoded job arguments
 
 
 @runtime_checkable

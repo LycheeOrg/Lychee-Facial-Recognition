@@ -3,8 +3,8 @@
 Both backends share the same table schema and SQL semantics.  The key
 difference is the locking strategy used during dequeue:
 
-* SQLite  – ``BEGIN EXCLUSIVE`` serialises all writers at the DB level.
-* PostgreSQL – ``SELECT … FOR UPDATE SKIP LOCKED`` allows multiple workers
+* SQLite  - ``BEGIN EXCLUSIVE`` serialises all writers at the DB level.
+* PostgreSQL - ``SELECT ... FOR UPDATE SKIP LOCKED`` allows multiple workers
   to dequeue concurrently without blocking each other.
 
 Jobs are deleted from the table when ``complete()`` is called, so
@@ -14,12 +14,12 @@ Jobs are deleted from the table when ``complete()`` is called, so
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import threading
 from pathlib import Path
 from typing import Any
 
 from app.queue.base import Job
-
 
 # ---------------------------------------------------------------------------
 # SQLite backend
@@ -68,6 +68,7 @@ class SQLiteJobQueue:
 
     def _connect(self) -> Any:
         import sqlite3
+
         return sqlite3.connect(self._db_path, check_same_thread=False)
 
     def _init_table(self) -> None:
@@ -115,8 +116,7 @@ class SQLiteJobQueue:
             try:
                 conn.execute("BEGIN EXCLUSIVE")
                 row = conn.execute(
-                    "SELECT id, job_type, photo_id, payload FROM job_queue "
-                    "WHERE status = 'pending' ORDER BY id LIMIT 1"
+                    "SELECT id, job_type, photo_id, payload FROM job_queue WHERE status = 'pending' ORDER BY id LIMIT 1"
                 ).fetchone()
                 if row is None:
                     conn.execute("ROLLBACK")
@@ -126,10 +126,8 @@ class SQLiteJobQueue:
                 conn.execute("COMMIT")
                 return Job(id=job_id, job_type=job_type, photo_id=photo_id, payload=payload)
             except Exception:
-                try:
+                with contextlib.suppress(Exception):
                     conn.execute("ROLLBACK")
-                except Exception:
-                    pass
                 raise
             finally:
                 conn.close()
@@ -260,9 +258,7 @@ class PgJobQueue:
                     )
                     """
                 )
-                cur.execute(
-                    "CREATE INDEX IF NOT EXISTS job_queue_status_idx ON job_queue(status, id)"
-                )
+                cur.execute("CREATE INDEX IF NOT EXISTS job_queue_status_idx ON job_queue(status, id)")
                 # Recover jobs stuck in 'processing' from a previous crash.
                 cur.execute("UPDATE job_queue SET status = 'pending' WHERE status = 'processing'")
             conn.commit()

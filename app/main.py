@@ -132,8 +132,7 @@ async def _default_lifespan(app: FastAPI) -> AsyncGenerator[None]:
 
     # Start one worker task per thread-pool slot so all CPU threads stay busy.
     worker_tasks = [
-        asyncio.create_task(run_worker(queue, app.state, settings))
-        for _ in range(settings.thread_pool_size)
+        asyncio.create_task(run_worker(queue, app.state, settings)) for _ in range(settings.thread_pool_size)
     ]
     logger.info("Started %d queue worker(s)", len(worker_tasks))
 
