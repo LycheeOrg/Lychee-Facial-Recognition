@@ -23,6 +23,5 @@ docker-build:
 
 docker-run:
 	docker run --rm -p $(PORT):8000 \
-		-e VISION_FACE_LYCHEE_API_URL \
-		-e VISION_FACE_API_KEY \
+		--env-file .env \
 		$(IMAGE)

@@ -14,6 +14,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libgl1 \
         libglib2.0-0 \
+        libxcb1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -46,6 +47,13 @@ RUN DEEPFACE_HOME=/root/.deepface uv run python -c \
 # Stage 3 – runtime: copy only what's needed to run.
 # ---------------------------------------------------------------------------
 FROM python:3.13-slim@sha256:739e7213785e88c0f702dcdc12c0973afcbd606dbf021a589cab77d6b00b579d AS runtime
+
+# Same runtime libraries as the builder stage (not inherited in a multi-stage build).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libgl1 \
+        libglib2.0-0 \
+        libxcb1 \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

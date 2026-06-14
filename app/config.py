@@ -77,6 +77,10 @@ class AppSettings(BaseSettings):
     Set to ``False`` for development environments with self-signed certificates.
     **WARNING:** Disabling SSL verification in production is a security risk."""
 
+    skip_lychee_check: bool = False
+    """Skip the Lychee connectivity check at startup.
+    Useful for local development or when Lychee is not yet reachable."""
+
     # --- Model ---
     model_name: str = "ArcFace"
     """DeepFace recognition model name.  ``ArcFace`` = high-accuracy 512-dim embeddings (default);

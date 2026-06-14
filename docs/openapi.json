@@ -1,0 +1,559 @@
+{
+	"openapi": "3.1.0",
+	"info": {
+		"title": "Lychee AI Vision Service",
+		"description": "Facial recognition microservice for Lychee photo gallery.",
+		"version": "0.1.0"
+	},
+	"paths": {
+		"/": {
+			"get": {
+				"summary": "Root",
+				"description": "Redirect root to /health endpoint.",
+				"operationId": "root__get",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/detect": {
+			"post": {
+				"summary": "Detect",
+				"description": "Accept a face-detection job.\n\nValidates the photo path (path-traversal protection), then immediately\nreturns **202 Accepted** and schedules detection as a background task.\nResults are POSTed back to Lychee's results endpoint once detection\ncompletes.",
+				"operationId": "detect_detect_post",
+				"parameters": [
+					{
+						"name": "X-API-Key",
+						"in": "header",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"title": "X-Api-Key"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DetectRequest"
+							}
+						}
+					}
+				},
+				"responses": {
+					"202": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/match": {
+			"post": {
+				"summary": "Match",
+				"description": "Match a selfie against stored face embeddings.\n\nAccepts a multipart image upload, detects the face, embeds it, and returns\nthe closest matches from the embedding store above the configured threshold.\n\nReturns **422** if no face is detected in the selfie.",
+				"operationId": "match_match_post",
+				"parameters": [
+					{
+						"name": "X-API-Key",
+						"in": "header",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"title": "X-Api-Key"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"multipart/form-data": {
+							"schema": {
+								"$ref": "#/components/schemas/Body_match_match_post"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/MatchResponse"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/embeddings": {
+			"delete": {
+				"summary": "Delete Embeddings",
+				"description": "Delete face embeddings by their Lychee Face IDs.\n\nCalled by Lychee when dismissed faces are permanently removed or when\na photo is deleted.",
+				"operationId": "delete_embeddings_embeddings_delete",
+				"parameters": [
+					{
+						"name": "X-API-Key",
+						"in": "header",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"title": "X-Api-Key"
+						}
+					}
+				],
+				"requestBody": {
+					"required": true,
+					"content": {
+						"application/json": {
+							"schema": {
+								"$ref": "#/components/schemas/DeleteEmbeddingsRequest"
+							}
+						}
+					}
+				},
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/DeleteEmbeddingsResponse"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/embeddings/export": {
+			"get": {
+				"summary": "Export Embeddings",
+				"description": "Export all face embeddings with metadata for synchronization.\n\nCalled by Lychee maintenance to re-sync face data after callback failures\nor to verify database consistency.",
+				"operationId": "export_embeddings_embeddings_export_get",
+				"parameters": [
+					{
+						"name": "X-API-Key",
+						"in": "header",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"title": "X-Api-Key"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/EmbeddingExportResponse"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/cluster": {
+			"post": {
+				"summary": "Cluster",
+				"description": "Run DBSCAN clustering over all stored face embeddings.\n\nImmediately returns **202 Accepted** and schedules clustering as a background\ntask. Results are POSTed back to Lychee's clustering results endpoint once\nclustering completes.",
+				"operationId": "cluster_cluster_post",
+				"parameters": [
+					{
+						"name": "X-API-Key",
+						"in": "header",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"title": "X-Api-Key"
+						}
+					}
+				],
+				"responses": {
+					"202": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/health": {
+			"get": {
+				"summary": "Health",
+				"description": "Return service health, model-loaded status, and embedding count.\n\nThis endpoint is intentionally unauthenticated so that load-balancers and\nDocker health checks can probe it without an API key.",
+				"operationId": "health_health_get",
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HealthResponse"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/config": {
+			"get": {
+				"summary": "Service Config",
+				"description": "Return current runtime configuration values.\n\nThe endpoint is authenticated because it exposes operational details.\nSensitive values are redacted by ``AppSettings.to_diagnostics_payload``.",
+				"operationId": "service_config_config_get",
+				"parameters": [
+					{
+						"name": "X-API-Key",
+						"in": "header",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"title": "X-Api-Key"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/ServiceConfigResponse"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	},
+	"components": {
+		"schemas": {
+			"Body_match_match_post": {
+				"properties": {
+					"file": {
+						"type": "string",
+						"contentMediaType": "application/octet-stream",
+						"title": "File"
+					}
+				},
+				"type": "object",
+				"required": [
+					"file"
+				],
+				"title": "Body_match_match_post"
+			},
+			"DeleteEmbeddingsRequest": {
+				"properties": {
+					"face_ids": {
+						"items": {
+							"type": "string"
+						},
+						"type": "array",
+						"minItems": 1,
+						"title": "Face Ids"
+					}
+				},
+				"type": "object",
+				"required": [
+					"face_ids"
+				],
+				"title": "DeleteEmbeddingsRequest",
+				"description": "Body sent by Lychee to delete face embeddings from the store."
+			},
+			"DeleteEmbeddingsResponse": {
+				"properties": {
+					"deleted": {
+						"type": "integer",
+						"title": "Deleted"
+					}
+				},
+				"type": "object",
+				"required": [
+					"deleted"
+				],
+				"title": "DeleteEmbeddingsResponse",
+				"description": "Response body for ``DELETE /embeddings``."
+			},
+			"DetectRequest": {
+				"properties": {
+					"photo_id": {
+						"type": "string",
+						"title": "Photo Id"
+					},
+					"photo_path": {
+						"type": "string",
+						"title": "Photo Path"
+					}
+				},
+				"type": "object",
+				"required": [
+					"photo_id",
+					"photo_path"
+				],
+				"title": "DetectRequest",
+				"description": "Body sent by Lychee when dispatching a face-detection job.\n\n``callback_url`` is intentionally absent: the service reads\n``VISION_FACE_LYCHEE_API_URL`` from env and posts results there directly."
+			},
+			"EmbeddingExportItem": {
+				"properties": {
+					"lychee_face_id": {
+						"type": "string",
+						"title": "Lychee Face Id"
+					},
+					"photo_id": {
+						"type": "string",
+						"title": "Photo Id"
+					},
+					"laplacian_variance": {
+						"type": "number",
+						"title": "Laplacian Variance"
+					},
+					"crop_path": {
+						"type": "string",
+						"title": "Crop Path"
+					}
+				},
+				"type": "object",
+				"required": [
+					"lychee_face_id",
+					"photo_id",
+					"laplacian_variance",
+					"crop_path"
+				],
+				"title": "EmbeddingExportItem",
+				"description": "One face embedding metadata record for syncing."
+			},
+			"EmbeddingExportResponse": {
+				"properties": {
+					"embeddings": {
+						"items": {
+							"$ref": "#/components/schemas/EmbeddingExportItem"
+						},
+						"type": "array",
+						"title": "Embeddings"
+					}
+				},
+				"type": "object",
+				"required": [
+					"embeddings"
+				],
+				"title": "EmbeddingExportResponse",
+				"description": "Response body for ``GET /embeddings/export``."
+			},
+			"HTTPValidationError": {
+				"properties": {
+					"detail": {
+						"items": {
+							"$ref": "#/components/schemas/ValidationError"
+						},
+						"type": "array",
+						"title": "Detail"
+					}
+				},
+				"type": "object",
+				"title": "HTTPValidationError"
+			},
+			"HealthResponse": {
+				"properties": {
+					"status": {
+						"type": "string",
+						"title": "Status"
+					},
+					"model_loaded": {
+						"type": "boolean",
+						"title": "Model Loaded"
+					},
+					"embedding_count": {
+						"type": "integer",
+						"title": "Embedding Count"
+					}
+				},
+				"type": "object",
+				"required": [
+					"status",
+					"model_loaded",
+					"embedding_count"
+				],
+				"title": "HealthResponse",
+				"description": "Response body for ``GET /health``."
+			},
+			"MatchResponse": {
+				"properties": {
+					"matches": {
+						"items": {
+							"$ref": "#/components/schemas/MatchResult"
+						},
+						"type": "array",
+						"title": "Matches"
+					}
+				},
+				"type": "object",
+				"required": [
+					"matches"
+				],
+				"title": "MatchResponse",
+				"description": "Response body for ``POST /match``."
+			},
+			"MatchResult": {
+				"properties": {
+					"lychee_face_id": {
+						"type": "string",
+						"title": "Lychee Face Id"
+					},
+					"confidence": {
+						"type": "number",
+						"maximum": 1.0,
+						"minimum": 0.0,
+						"title": "Confidence"
+					}
+				},
+				"type": "object",
+				"required": [
+					"lychee_face_id",
+					"confidence"
+				],
+				"title": "MatchResult",
+				"description": "A single candidate face returned from a selfie-match query."
+			},
+			"ServiceConfigResponse": {
+				"properties": {
+					"config": {
+						"additionalProperties": {
+							"type": "string"
+						},
+						"type": "object",
+						"title": "Config"
+					}
+				},
+				"type": "object",
+				"required": [
+					"config"
+				],
+				"title": "ServiceConfigResponse",
+				"description": "Response body for ``GET /config``."
+			},
+			"ValidationError": {
+				"properties": {
+					"loc": {
+						"items": {
+							"anyOf": [
+								{
+									"type": "string"
+								},
+								{
+									"type": "integer"
+								}
+							]
+						},
+						"type": "array",
+						"title": "Location"
+					},
+					"msg": {
+						"type": "string",
+						"title": "Message"
+					},
+					"type": {
+						"type": "string",
+						"title": "Error Type"
+					},
+					"input": {
+						"title": "Input"
+					},
+					"ctx": {
+						"type": "object",
+						"title": "Context"
+					}
+				},
+				"type": "object",
+				"required": [
+					"loc",
+					"msg",
+					"type"
+				],
+				"title": "ValidationError"
+			}
+		}
+	}
+}
