@@ -120,8 +120,7 @@ jobs:
         if: matrix.python-version == '3.13'
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
-          files: ai-vision-service/face-recognition/coverage.xml
-          flags: ai-vision-service/face-recognition
+          files: coverage.xml
         continue-on-error: true
 
   # ---------------------------------------------------------------------------
