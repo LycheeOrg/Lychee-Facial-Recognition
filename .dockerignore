@@ -1,0 +1,68 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+
+# Coding
+.ai
+.vscode
+
+# dependencies
+composer-cache
+vendor/
+node_modules/
+
+# Documentation
+README.md
+docs/
+
+# Development files
+.editorconfig
+.php-cs-fixer.php
+.php-cs-fixer.cache
+.gitattributes
+.gitignore
+.php-cs-fixer.php
+.phpstaorm.meta.php
+.prettierrc.json
+AGENTS.md
+codecov.yml
+CONTRIBUTING.md
+Dockerfile
+eslint.config.js
+Makefile
+osv-scanner.toml
+phpstan-baseline.neon
+phpstan.neon
+phpunit.ci.xml
+phpunit.xml
+.phpunit.result.cache
+rector.php
+sonar-project.properties
+phpstan/*
+scripts/*
+vite/*
+secrets/*
+# Local testing @ildyria
+public/uploads-bck/*
+public/uploads/*
+*.sql
+
+# IDE
+.ai/
+.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tests
+tests/*

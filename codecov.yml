@@ -1,0 +1,32 @@
+---
+codecov:
+  require_ci_to_pass: true
+  notify:
+    wait_for_ci: true
+    # after_n_builds: 1
+comment:
+  behavior: default
+  require_base: false
+  require_changes: true
+  require_head: true
+github_checks:
+  annotations: false
+coverage:
+  precision: 2
+  round: down
+  status:
+    changes: false
+    patch: off
+    project:
+      default:
+        target: 90%
+ignore: []
+parsers:
+  gcov:
+    branch_detection:
+      conditional: true
+      loop: true
+      macro: false
+      method: false
+  javascript:
+    enable_partials: false

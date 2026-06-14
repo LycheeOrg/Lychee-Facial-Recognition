@@ -1,0 +1,73 @@
+# We don't care about those
+node_modules
+build/*
+
+# Those are personal
+public/dist/user.css
+public/dist/custom.js
+public/build/*
+
+# Pictures we do not commit
+public/uploads/**
+public/uploads-*/**
+
+# Storage stuff: useless
+/storage/*.key
+/storage/clockwork/
+
+# Those are generated
+/vendor
+# We do not commit the sample zip file
+# We are generating it in the CI
+# We do not want to have the same story as CVE-2024-3094 ...
+tests/Samples/test_photos.zip
+
+# IDE & Cache stuff
+/.idea
+/.vscode
+!.vscode/extensions.json
+npm-debug.log
+.phpunit*
+_ide*
+.php_cs.cache
+.php-cs-fixer.cache
+*.log
+clover.xml
+*.swp
+.DS_Store
+.NO_AUTO_COMPOSER_MIGRATE
+storage/bootstrap/cache/*
+storage/image-jobs/*
+**/__pycache__/**
+.coverage
+
+# used by Vite
+public/hot
+lang/php_*.json
+
+sync/*
+
+# Local DB for easy deployment
+backup.sql
+*-bck
+
+# Make sure we don't commit secrets
+.env
+.env.*
+!.env.example
+
+aliases
+pgdata
+docker-compose.yml
+
+# Building stuff for releaseses
+Lychee/*
+lychee/*
+/public/embed/
+report_*
+
+# XHProf output
+public/vendor/
+**/caddy
+frankenphp
+frankenphp-worker.php
