@@ -272,3 +272,23 @@ class EmbeddingExportResponse(BaseModel):
 
     embeddings: list[EmbeddingExportItem]
     """All stored face embeddings with metadata."""
+
+
+# ---------------------------------------------------------------------------
+# /queue
+# ---------------------------------------------------------------------------
+
+
+class QueueSizeResponse(BaseModel):
+    """Response body for ``GET /queue``."""
+
+    pending: int
+    """Number of jobs waiting to be processed."""
+
+
+class QueuePositionResponse(BaseModel):
+    """Response body for ``GET /queue/{photo_id}``."""
+
+    photo_id: str
+    position: int
+    """1-based rank in the pending queue.  0 means the job is currently being processed."""

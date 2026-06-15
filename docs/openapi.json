@@ -26,7 +26,7 @@
 		"/detect": {
 			"post": {
 				"summary": "Detect",
-				"description": "Accept a face-detection job.\n\nValidates the photo path (path-traversal protection), then immediately\nreturns **202 Accepted** and schedules detection as a background task.\nResults are POSTed back to Lychee's results endpoint once detection\ncompletes.",
+				"description": "Accept a face-detection job.\n\nValidates the photo path (path-traversal protection), then immediately\nreturns **202 Accepted** and enqueues detection for a background worker.\nReturns **429 Too Many Requests** when the queue is full.\nResults are POSTed back to Lychee's results endpoint once detection\ncompletes.",
 				"operationId": "detect_detect_post",
 				"parameters": [
 					{
@@ -214,7 +214,7 @@
 		"/cluster": {
 			"post": {
 				"summary": "Cluster",
-				"description": "Run DBSCAN clustering over all stored face embeddings.\n\nImmediately returns **202 Accepted** and schedules clustering as a background\ntask. Results are POSTed back to Lychee's clustering results endpoint once\nclustering completes.",
+				"description": "Run DBSCAN clustering over all stored face embeddings.\n\nImmediately returns **202 Accepted** and enqueues clustering for a background\nworker. Returns **429 Too Many Requests** when the queue is full.\nResults are POSTed back to Lychee's clustering results endpoint once\nclustering completes.",
 				"operationId": "cluster_cluster_post",
 				"parameters": [
 					{
@@ -291,6 +291,135 @@
 							"application/json": {
 								"schema": {
 									"$ref": "#/components/schemas/ServiceConfigResponse"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/queue": {
+			"get": {
+				"tags": [
+					"queue"
+				],
+				"summary": "Queue Size",
+				"description": "Return the number of jobs currently waiting to be processed.",
+				"operationId": "queue_size_queue_get",
+				"parameters": [
+					{
+						"name": "X-API-Key",
+						"in": "header",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"title": "X-Api-Key"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/QueueSizeResponse"
+								}
+							}
+						}
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			},
+			"delete": {
+				"tags": [
+					"queue"
+				],
+				"summary": "Queue Purge",
+				"description": "Delete all pending jobs from the queue. In-flight jobs are not affected.",
+				"operationId": "queue_purge_queue_delete",
+				"parameters": [
+					{
+						"name": "X-API-Key",
+						"in": "header",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"title": "X-Api-Key"
+						}
+					}
+				],
+				"responses": {
+					"204": {
+						"description": "Successful Response"
+					},
+					"422": {
+						"description": "Validation Error",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/HTTPValidationError"
+								}
+							}
+						}
+					}
+				}
+			}
+		},
+		"/queue/{photo_id}": {
+			"get": {
+				"tags": [
+					"queue"
+				],
+				"summary": "Queue Position",
+				"description": "Return the position of a photo in the queue.\n\n- **present** → job is waiting; ``position`` is its 1-based rank among pending jobs.\n  ``position=0`` means the job is currently being processed.\n- **absent** → job is done (404).",
+				"operationId": "queue_position_queue__photo_id__get",
+				"parameters": [
+					{
+						"name": "photo_id",
+						"in": "path",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"title": "Photo Id"
+						}
+					},
+					{
+						"name": "X-API-Key",
+						"in": "header",
+						"required": true,
+						"schema": {
+							"type": "string",
+							"title": "X-Api-Key"
+						}
+					}
+				],
+				"responses": {
+					"200": {
+						"description": "Successful Response",
+						"content": {
+							"application/json": {
+								"schema": {
+									"$ref": "#/components/schemas/QueuePositionResponse"
 								}
 							}
 						}
@@ -496,6 +625,39 @@
 				],
 				"title": "MatchResult",
 				"description": "A single candidate face returned from a selfie-match query."
+			},
+			"QueuePositionResponse": {
+				"properties": {
+					"photo_id": {
+						"type": "string",
+						"title": "Photo Id"
+					},
+					"position": {
+						"type": "integer",
+						"title": "Position"
+					}
+				},
+				"type": "object",
+				"required": [
+					"photo_id",
+					"position"
+				],
+				"title": "QueuePositionResponse",
+				"description": "Response body for ``GET /queue/{photo_id}``."
+			},
+			"QueueSizeResponse": {
+				"properties": {
+					"pending": {
+						"type": "integer",
+						"title": "Pending"
+					}
+				},
+				"type": "object",
+				"required": [
+					"pending"
+				],
+				"title": "QueueSizeResponse",
+				"description": "Response body for ``GET /queue``."
 			},
 			"ServiceConfigResponse": {
 				"properties": {

@@ -8,6 +8,7 @@ the real face recognition model.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import typing
@@ -20,6 +21,8 @@ from fastapi import FastAPI
 
 from app.api.routes import router
 from app.config import AppSettings, get_settings
+from app.queue.factory import create_queue
+from app.queue.worker import run_worker
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -118,14 +121,30 @@ async def _default_lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Thread pool for CPU-bound inference
     executor = ThreadPoolExecutor(max_workers=settings.thread_pool_size)
 
+    # Job queue (shared across workers via DB or Redis)
+    queue = create_queue(settings)
+    logger.info("Job queue initialised (backend=%s, max_size=%d)", settings.queue_backend, settings.queue_max_size)
+
     app.state.detector = detector
     app.state.store = store
     app.state.executor = executor
+    app.state.queue = queue
 
-    yield
+    # Start one worker task per thread-pool slot so all CPU threads stay busy.
+    worker_tasks = [
+        asyncio.create_task(run_worker(queue, app.state, settings)) for _ in range(settings.thread_pool_size)
+    ]
+    logger.info("Started %d queue worker(s)", len(worker_tasks))
 
-    executor.shutdown(wait=False)
-    logger.info("AI Vision Service shut down")
+    try:
+        yield
+    finally:
+        for task in worker_tasks:
+            task.cancel()
+        await asyncio.gather(*worker_tasks, return_exceptions=True)
+        await queue.close()
+        executor.shutdown(wait=False)
+        logger.info("AI Vision Service shut down")
 
 
 def create_app(lifespan: Any = None) -> FastAPI:
