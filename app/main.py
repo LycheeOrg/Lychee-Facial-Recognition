@@ -136,14 +136,15 @@ async def _default_lifespan(app: FastAPI) -> AsyncGenerator[None]:
     ]
     logger.info("Started %d queue worker(s)", len(worker_tasks))
 
-    yield
-
-    for task in worker_tasks:
-        task.cancel()
-    await asyncio.gather(*worker_tasks, return_exceptions=True)
-    await queue.close()
-    executor.shutdown(wait=False)
-    logger.info("AI Vision Service shut down")
+    try:
+        yield
+    finally:
+        for task in worker_tasks:
+            task.cancel()
+        await asyncio.gather(*worker_tasks, return_exceptions=True)
+        await queue.close()
+        executor.shutdown(wait=False)
+        logger.info("AI Vision Service shut down")
 
 
 def create_app(lifespan: Any = None) -> FastAPI:

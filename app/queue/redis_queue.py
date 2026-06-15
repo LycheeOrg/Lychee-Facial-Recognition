@@ -50,7 +50,7 @@ class RedisJobQueue:
 
     async def enqueue(self, job_type: str, photo_id: str, payload: str) -> bool:
         r = self._redis
-        if r.llen(self._JOBS_KEY) >= self._max_size:
+        if r.llen(self._JOBS_KEY) >= self._max_size and self._max_size > 0:
             return False
         job_id = r.incr(self._COUNTER_KEY)
         item = json.dumps({"id": job_id, "job_type": job_type, "photo_id": photo_id, "payload": payload})

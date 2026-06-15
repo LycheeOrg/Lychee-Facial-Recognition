@@ -154,7 +154,7 @@ class AppSettings(BaseSettings):
     queue_backend: str = "database"
     """Queue backend: ``database`` (SQLite or PostgreSQL, matches ``storage_backend``) or ``redis``."""
 
-    queue_max_size: int = 100
+    queue_max_size: int = 0
     """Maximum number of pending jobs in the queue.  Requests that would exceed
     this limit are rejected with **429 Too Many Requests**."""
 

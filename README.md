@@ -185,7 +185,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Install all dependencies (including dev)
 uv sync
 
-# Copy and edit the env file — at minimum set LYCHEE_API_URL and API_KEY
+# Copy and edit the env file — at minimum set VISION_FACE_LYCHEE_API_URL and VISION_FACE_API_KEY
 cp .env.example .env
 ```
 

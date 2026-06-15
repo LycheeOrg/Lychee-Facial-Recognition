@@ -99,7 +99,7 @@ class SQLiteJobQueue:
             conn = self._connect()
             try:
                 row = conn.execute("SELECT COUNT(*) FROM job_queue WHERE status = 'pending'").fetchone()
-                if row and row[0] >= self._max_size:
+                if row and row[0] >= self._max_size and self._max_size > 0:
                     return False
                 conn.execute(
                     "INSERT INTO job_queue (job_type, photo_id, payload) VALUES (?, ?, ?)",
@@ -269,7 +269,7 @@ class PgJobQueue:
             with conn.cursor() as cur:
                 cur.execute("SELECT COUNT(*) FROM job_queue WHERE status = 'pending'")
                 row = cur.fetchone()
-                if row and row[0] >= self._max_size:
+                if row and row[0] >= self._max_size and self._max_size > 0:
                     return False
                 cur.execute(
                     "INSERT INTO job_queue (job_type, photo_id, payload) VALUES (%s, %s, %s)",

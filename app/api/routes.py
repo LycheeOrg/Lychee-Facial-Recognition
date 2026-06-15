@@ -74,7 +74,14 @@ async def root() -> RedirectResponse:
 # ---------------------------------------------------------------------------
 
 
-@router.post("/detect", status_code=202)
+@router.post(
+    "/detect",
+    status_code=202,
+    responses={
+        400: {"description": "Invalid or inaccessible photo path"},
+        429: {"description": "Queue is full — try again later"},
+    },
+)
 async def detect(
     body: DetectRequest,
     request: Request,
@@ -220,7 +227,13 @@ async def export_embeddings(
 # ---------------------------------------------------------------------------
 
 
-@router.post("/cluster", status_code=202)
+@router.post(
+    "/cluster",
+    status_code=202,
+    responses={
+        429: {"description": "Queue is full — try again later"},
+    },
+)
 async def cluster(
     request: Request,
     settings: AppSettings = Depends(get_settings),
@@ -288,7 +301,12 @@ async def queue_purge(
     await queue.purge()
 
 
-@queue_router.get("/{photo_id}")
+@queue_router.get(
+    "/{photo_id}",
+    responses={
+        404: {"description": "Photo not found in queue (already done or never submitted)"},
+    },
+)
 async def queue_position(
     photo_id: str,
     request: Request,
