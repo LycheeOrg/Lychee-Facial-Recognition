@@ -16,6 +16,13 @@ claiming via a REST API consumed by the Lychee PHP backend.
 [![Discord][discord-shield]][discord]
 [![GitGem](https://gitgem.org/api/badge/github/LycheeOrg/Lychee.svg)](https://gitgem.org/github/LycheeOrg/Lychee)
 
+## Disclaimer
+
+> **Legal notice:** Facial recognition technology may be subject to strict legal restrictions or outright prohibited in your jurisdiction. Before deploying this service, ensure you comply with all applicable laws and regulations.
+>
+> **Example — the Netherlands:** Under the Dutch implementation of the EU General Data Protection Regulation (GDPR), biometric data (including facial recognition embeddings) is classified as **special category data** (Article 9 GDPR). Processing such data is prohibited unless a specific legal basis applies (e.g. explicit informed consent). The Dutch Data Protection Authority (*Autoriteit Persoonsgegevens*) has issued guidance making clear that using facial recognition on individuals without a valid legal ground constitutes a serious infringement, potentially carrying fines of up to **€20 million or 4 % of global annual turnover**.
+>
+> Similar or stricter rules may apply in other EU/EEA countries, the United Kingdom, Canada, and many other jurisdictions. **The authors and contributors of this project accept no liability for unlawful use.** It is your sole responsibility to obtain any required consent, implement appropriate safeguards, and verify legality before operating this software.
 
 ## Tech stack
 
@@ -33,7 +40,7 @@ claiming via a REST API consumed by the Lychee PHP backend.
 ## Directory layout
 
 ```
-ai-vision-service/
+Lychee-Facial-Recognition/
 ├── app/
 │   ├── __init__.py
 │   ├── config.py          # AppSettings (Pydantic BaseSettings)
