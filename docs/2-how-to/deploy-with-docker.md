@@ -20,7 +20,7 @@ The Dockerfile bakes the ArcFace and RetinaFace model weights into the image. Ex
 docker run --rm \
   -e VISION_FACE_LYCHEE_API_URL=http://lychee \
   -e VISION_FACE_API_KEY=your-shared-secret \
-  -v /path/to/lychee/photos:/data/photos:ro \
+  -v /path/to/lychee/public/uploads:/data/photos:ro \
   -v ai-vision-embeddings:/data/embeddings \
   -p 8000:8000 \
   lychee-ai-vision
@@ -44,7 +44,7 @@ Then run:
 
 ```bash
 docker run --rm --env-file .env \
-  -v /path/to/photos:/data/photos:ro \
+  -v /path/to/lychee/public/uploads:/data/photos:ro \
   -v ai-vision-embeddings:/data/embeddings \
   -p 8000:8000 \
   lychee-ai-vision
