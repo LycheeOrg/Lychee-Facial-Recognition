@@ -222,7 +222,7 @@ make docker-run
 # Or manually, mounting photo and embedding volumes
 docker run --rm \
   --env-file .env \
-  -v /path/to/lychee/photos:/data/photos:ro \
+  -v /path/to/lychee/public/uploads:/data/photos:ro \
   -v ai-vision-embeddings:/data/embeddings \
   -p 8000:8000 \
   lychee-ai-vision
