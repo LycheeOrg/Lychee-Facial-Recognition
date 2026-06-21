@@ -74,7 +74,12 @@ async def _default_lifespan(app: FastAPI) -> AsyncGenerator[None]:
         try:
             async with httpx.AsyncClient(verify=settings.verify_ssl, timeout=10.0) as client:
                 response = await client.get(lychee_up_url)
-                response.raise_for_status()
+                if response.status_code not in (200, 307):
+                    raise httpx.HTTPStatusError(
+                        f"Non-success status {response.status_code}",
+                        request=response.request,
+                        response=response,
+                    )
                 logger.info("✓ Lychee is reachable (status=%d)", response.status_code)
         except httpx.HTTPStatusError as e:
             logger.error("✗ Lychee /up endpoint returned status %d", e.response.status_code)
