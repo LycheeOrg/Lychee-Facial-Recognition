@@ -150,6 +150,10 @@ class AppSettings(BaseSettings):
     """DBSCAN epsilon (max cosine distance) for face clustering.
     Lower values produce tighter, more homogeneous clusters."""
 
+    auto_dispatch_dbscan: bool = True
+    """Automatically dispatch a DBSCAN clustering job after the last detection
+    job in the queue completes. Set to ``False`` to disable."""
+
     # --- Job queue ---
     queue_backend: str = "database"
     """Queue backend: ``database`` (SQLite or PostgreSQL, matches ``storage_backend``) or ``redis``."""
