@@ -208,6 +208,7 @@ class AppSettings(BaseSettings):
         Only non-sensitive operational settings are exposed via diagnostics.
         """
         return {
+            "auto_dispatch_dbscan": str(self.auto_dispatch_dbscan),
             "blur_threshold": str(self.blur_threshold),
             "cluster_eps": str(self.cluster_eps),
             "detection_threshold": str(self.detection_threshold),
