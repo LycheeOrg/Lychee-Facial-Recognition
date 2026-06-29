@@ -45,9 +45,7 @@ def settings_disabled() -> AppSettings:
 # ---------------------------------------------------------------------------
 
 
-async def test_dispatches_cluster_when_queue_idle_and_enabled(
-    queue: AsyncMock, settings_enabled: AppSettings
-) -> None:
+async def test_dispatches_cluster_when_queue_idle_and_enabled(queue: AsyncMock, settings_enabled: AppSettings) -> None:
     queue.enqueue_if_idle.return_value = True
 
     await _maybe_dispatch_clustering(queue, settings_enabled)
