@@ -48,6 +48,18 @@ class RedisJobQueue:
     # JobQueue protocol
     # ------------------------------------------------------------------
 
+    _ENQUEUE_IF_IDLE_SCRIPT = """
+    local pending = redis.call('LLEN', KEYS[1])
+    local inflight = redis.call('HLEN', KEYS[2])
+    if pending + inflight > 0 then
+        return 0
+    end
+    local job_id = redis.call('INCR', KEYS[3])
+    local item = cjson.encode({id=job_id, job_type=ARGV[1], photo_id=ARGV[2], payload=ARGV[3]})
+    redis.call('RPUSH', KEYS[1], item)
+    return 1
+    """
+
     async def enqueue(self, job_type: str, photo_id: str, payload: str) -> bool:
         r = self._redis
         if r.llen(self._JOBS_KEY) >= self._max_size and self._max_size > 0:
@@ -56,6 +68,15 @@ class RedisJobQueue:
         item = json.dumps({"id": job_id, "job_type": job_type, "photo_id": photo_id, "payload": payload})
         r.rpush(self._JOBS_KEY, item)
         return True
+
+    async def enqueue_if_idle(self, job_type: str, photo_id: str, payload: str) -> bool:
+        r = self._redis
+        script = r.register_script(self._ENQUEUE_IF_IDLE_SCRIPT)
+        result = script(
+            keys=[self._JOBS_KEY, self._INFLIGHT_KEY, self._COUNTER_KEY],
+            args=[job_type, photo_id, payload],
+        )
+        return int(result) == 1
 
     async def dequeue(self) -> Job | None:
         r = self._redis

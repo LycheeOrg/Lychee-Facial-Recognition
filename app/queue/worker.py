@@ -40,6 +40,9 @@ async def run_worker(queue: JobQueue, state: Any, settings: AppSettings) -> None
             finally:
                 await queue.complete(job.id)
 
+            if job.job_type == "detect":
+                await _maybe_dispatch_clustering(queue, settings)
+
         except asyncio.CancelledError:
             break
         except Exception:
@@ -68,3 +71,13 @@ async def _handle_cluster(state: Any, settings: AppSettings) -> None:
         executor=state.executor,
         settings=settings,
     )
+
+
+async def _maybe_dispatch_clustering(queue: JobQueue, settings: AppSettings) -> None:
+    """Atomically enqueue a clustering job when the queue is idle and auto-dispatch is enabled."""
+    if not settings.auto_dispatch_dbscan:
+        return
+
+    enqueued = await queue.enqueue_if_idle(job_type="cluster", photo_id="", payload=json.dumps({}))
+    if enqueued:
+        logger.info("Queue idle after detect job — auto-dispatched DBSCAN clustering")
