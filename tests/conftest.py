@@ -112,6 +112,7 @@ def mock_queue() -> JobQueue:
     m = AsyncMock()
     m.size.return_value = 0
     m.enqueue.return_value = True
+    m.enqueue_if_idle.return_value = False
     m.position.return_value = None
     return m  # type: ignore[return-value]
 

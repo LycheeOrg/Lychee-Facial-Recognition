@@ -44,6 +44,9 @@ class SQLiteJobQueue:
     async def enqueue(self, job_type: str, photo_id: str, payload: str) -> bool:
         return await asyncio.to_thread(self._enqueue_sync, job_type, photo_id, payload)
 
+    async def enqueue_if_idle(self, job_type: str, photo_id: str, payload: str) -> bool:
+        return await asyncio.to_thread(self._enqueue_if_idle_sync, job_type, photo_id, payload)
+
     async def dequeue(self) -> Job | None:
         return await asyncio.to_thread(self._dequeue_sync)
 
@@ -107,6 +110,28 @@ class SQLiteJobQueue:
                 )
                 conn.commit()
                 return True
+            finally:
+                conn.close()
+
+    def _enqueue_if_idle_sync(self, job_type: str, photo_id: str, payload: str) -> bool:
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute("BEGIN EXCLUSIVE")
+                row = conn.execute("SELECT COUNT(*) FROM job_queue").fetchone()
+                if row and row[0] > 0:
+                    conn.execute("ROLLBACK")
+                    return False
+                conn.execute(
+                    "INSERT INTO job_queue (job_type, photo_id, payload) VALUES (?, ?, ?)",
+                    [job_type, photo_id, payload],
+                )
+                conn.execute("COMMIT")
+                return True
+            except Exception:
+                with contextlib.suppress(Exception):
+                    conn.execute("ROLLBACK")
+                raise
             finally:
                 conn.close()
 
@@ -210,6 +235,9 @@ class PgJobQueue:
     async def enqueue(self, job_type: str, photo_id: str, payload: str) -> bool:
         return await asyncio.to_thread(self._enqueue_sync, job_type, photo_id, payload)
 
+    async def enqueue_if_idle(self, job_type: str, photo_id: str, payload: str) -> bool:
+        return await asyncio.to_thread(self._enqueue_if_idle_sync, job_type, photo_id, payload)
+
     async def dequeue(self) -> Job | None:
         return await asyncio.to_thread(self._dequeue_sync)
 
@@ -277,6 +305,27 @@ class PgJobQueue:
                 )
             conn.commit()
             return True
+
+    def _enqueue_if_idle_sync(self, job_type: str, photo_id: str, payload: str) -> bool:
+        with self._lock:
+            conn = self._get_conn()
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("LOCK TABLE job_queue IN EXCLUSIVE MODE")
+                    cur.execute("SELECT COUNT(*) FROM job_queue")
+                    row = cur.fetchone()
+                    if row and row[0] > 0:
+                        conn.rollback()
+                        return False
+                    cur.execute(
+                        "INSERT INTO job_queue (job_type, photo_id, payload) VALUES (%s, %s, %s)",
+                        (job_type, photo_id, payload),
+                    )
+                conn.commit()
+                return True
+            except Exception:
+                conn.rollback()
+                raise
 
     def _dequeue_sync(self) -> Job | None:
         with self._lock:

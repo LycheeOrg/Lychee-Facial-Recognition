@@ -20,6 +20,13 @@ class JobQueue(Protocol):
         """Add a job to the queue. Returns False when the queue is at capacity."""
         ...
 
+    async def enqueue_if_idle(self, job_type: str, photo_id: str, payload: str) -> bool:
+        """Atomically enqueue a job only if the queue has no pending or in-flight jobs.
+
+        Returns True if the job was enqueued, False if the queue was not idle.
+        """
+        ...
+
     async def dequeue(self) -> Job | None:
         """Pop the next pending job and mark it as processing. None = queue empty."""
         ...

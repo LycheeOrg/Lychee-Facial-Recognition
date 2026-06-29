@@ -74,13 +74,10 @@ async def _handle_cluster(state: Any, settings: AppSettings) -> None:
 
 
 async def _maybe_dispatch_clustering(queue: JobQueue, settings: AppSettings) -> None:
-    """Enqueue a clustering job when the queue is empty and auto-dispatch is enabled."""
+    """Atomically enqueue a clustering job when the queue is idle and auto-dispatch is enabled."""
     if not settings.auto_dispatch_dbscan:
         return
 
-    pending = await queue.size()
-    if pending > 0:
-        return
-
-    logger.info("Queue empty after detect job — auto-dispatching DBSCAN clustering")
-    await queue.enqueue(job_type="cluster", photo_id="", payload=json.dumps({}))
+    enqueued = await queue.enqueue_if_idle(job_type="cluster", photo_id="", payload=json.dumps({}))
+    if enqueued:
+        logger.info("Queue idle after detect job — auto-dispatched DBSCAN clustering")

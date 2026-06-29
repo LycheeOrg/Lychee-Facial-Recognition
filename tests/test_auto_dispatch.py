@@ -22,8 +22,7 @@ if TYPE_CHECKING:
 @pytest.fixture
 def queue() -> JobQueue:
     m = AsyncMock()
-    m.size.return_value = 0
-    m.enqueue.return_value = True
+    m.enqueue_if_idle.return_value = True
     return m  # type: ignore[return-value]
 
 
@@ -46,34 +45,61 @@ def settings_disabled() -> AppSettings:
 # ---------------------------------------------------------------------------
 
 
-async def test_dispatches_cluster_when_queue_empty_and_enabled(queue: AsyncMock, settings_enabled: AppSettings) -> None:
-    queue.size.return_value = 0
+async def test_dispatches_cluster_when_queue_idle_and_enabled(
+    queue: AsyncMock, settings_enabled: AppSettings
+) -> None:
+    queue.enqueue_if_idle.return_value = True
 
     await _maybe_dispatch_clustering(queue, settings_enabled)
 
-    queue.enqueue.assert_called_once_with(job_type="cluster", photo_id="", payload="{}")
+    queue.enqueue_if_idle.assert_called_once_with(job_type="cluster", photo_id="", payload="{}")
 
 
 async def test_does_not_dispatch_when_disabled(queue: AsyncMock, settings_disabled: AppSettings) -> None:
-    queue.size.return_value = 0
-
     await _maybe_dispatch_clustering(queue, settings_disabled)
 
-    queue.enqueue.assert_not_called()
-    queue.size.assert_not_called()
+    queue.enqueue_if_idle.assert_not_called()
 
 
-async def test_does_not_dispatch_when_queue_has_pending_jobs(queue: AsyncMock, settings_enabled: AppSettings) -> None:
-    queue.size.return_value = 3
-
-    await _maybe_dispatch_clustering(queue, settings_enabled)
-
-    queue.enqueue.assert_not_called()
-
-
-async def test_does_not_dispatch_when_single_job_pending(queue: AsyncMock, settings_enabled: AppSettings) -> None:
-    queue.size.return_value = 1
+async def test_does_not_enqueue_when_queue_not_idle(queue: AsyncMock, settings_enabled: AppSettings) -> None:
+    queue.enqueue_if_idle.return_value = False
 
     await _maybe_dispatch_clustering(queue, settings_enabled)
 
-    queue.enqueue.assert_not_called()
+    queue.enqueue_if_idle.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# enqueue_if_idle — SQLite integration
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def sqlite_queue(tmp_path: pytest.TempPathFactory) -> AsyncMock:
+    from app.queue.db_queue import SQLiteJobQueue
+
+    return SQLiteJobQueue(str(tmp_path), max_size=10)
+
+
+async def test_enqueue_if_idle_succeeds_on_empty_queue(sqlite_queue: AsyncMock) -> None:
+    result = await sqlite_queue.enqueue_if_idle("cluster", "", "{}")
+    assert result is True
+    assert await sqlite_queue.size() == 1
+    job = await sqlite_queue.dequeue()
+    assert job is not None
+    assert job.job_type == "cluster"
+
+
+async def test_enqueue_if_idle_rejected_when_pending_job_exists(sqlite_queue: AsyncMock) -> None:
+    await sqlite_queue.enqueue("detect", "photo-1", "{}")
+
+    result = await sqlite_queue.enqueue_if_idle("cluster", "", "{}")
+    assert result is False
+
+
+async def test_enqueue_if_idle_rejected_when_inflight_job_exists(sqlite_queue: AsyncMock) -> None:
+    await sqlite_queue.enqueue("detect", "photo-1", "{}")
+    await sqlite_queue.dequeue()  # moves to processing
+
+    result = await sqlite_queue.enqueue_if_idle("cluster", "", "{}")
+    assert result is False
