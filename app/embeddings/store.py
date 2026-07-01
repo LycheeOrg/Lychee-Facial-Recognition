@@ -109,6 +109,22 @@ class EmbeddingStore(Protocol):
         """
         ...
 
+    def delete_except(self, keep_ids: list[str]) -> int:
+        """Delete all embeddings whose lychee_face_id is not in keep_ids.
+
+        Implementations must use a temporary table to hold keep_ids so that
+        the operation is safe for arbitrarily large lists (no bind-variable
+        limit).
+
+        Args:
+            keep_ids: List of Lychee ``Face.id`` values to retain.  Must
+                contain at least one entry (enforced at the API layer).
+
+        Returns:
+            Number of embeddings deleted.
+        """
+        ...
+
     def count(self) -> int:
         """Return the total number of stored embeddings."""
         ...

@@ -4,6 +4,8 @@ These models define the contract between the Python service and Lychee (PHP).
 All fields are fully type-annotated; no ``Any`` types are used.
 """
 
+from __future__ import annotations
+
 from pydantic import BaseModel, Field
 
 # ---------------------------------------------------------------------------
@@ -166,6 +168,30 @@ class DeleteEmbeddingsResponse(BaseModel):
 
     deleted: int
     """Number of embeddings actually removed (IDs not found are silently skipped)."""
+
+
+# ---------------------------------------------------------------------------
+# DELETE /embeddings/purge - Lychee -> Python
+# ---------------------------------------------------------------------------
+
+
+class PurgeEmbeddingsRequest(BaseModel):
+    """Body sent by Lychee to retain a specific set of face embeddings."""
+
+    keep_ids: list[str] = Field(min_length=1)
+    """List of Lychee ``Face.id`` values whose embeddings should be **kept**.
+
+    Every stored embedding whose ID is **not** in this list is deleted.
+    The list must contain at least one entry; send ``DELETE /embeddings`` to
+    remove individual IDs explicitly.
+    """
+
+
+class PurgeEmbeddingsResponse(BaseModel):
+    """Response body for ``DELETE /embeddings/purge``."""
+
+    deleted: int
+    """Number of embeddings deleted (entries already absent are not counted)."""
 
 
 # ---------------------------------------------------------------------------

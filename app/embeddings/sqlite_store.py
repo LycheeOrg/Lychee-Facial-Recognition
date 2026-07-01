@@ -200,6 +200,38 @@ class SQLiteEmbeddingStore(EmbeddingStore):
         finally:
             conn.close()
 
+    def delete_except(self, keep_ids: list[str]) -> int:
+        """Delete all embeddings not in keep_ids using a temporary table."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                # Populate a temp table so the NOT IN subquery has no
+                # bind-variable limit (SQLite caps at 999 by default).
+                conn.execute("CREATE TEMPORARY TABLE IF NOT EXISTS _keep_ids (id TEXT PRIMARY KEY)")
+                conn.execute("DELETE FROM _keep_ids")
+                for i in range(0, max(len(keep_ids), 1), 100):
+                    conn.executemany(
+                        "INSERT OR IGNORE INTO _keep_ids(id) VALUES (?)",
+                        [(fid,) for fid in keep_ids[i : i + 100]],
+                    )
+
+                # vec0 virtual table only supports rowid-based deletes, so
+                # collect the rowids first then batch-delete them in chunks.
+                rows = conn.execute(
+                    "SELECT vec_rowid FROM face_meta WHERE lychee_face_id NOT IN (SELECT id FROM _keep_ids)"
+                ).fetchall()
+                for i in range(0, max(len(rows), 1), 100):
+                    conn.executemany("DELETE FROM vec_faces WHERE rowid = ?", rows[i : i + 100])
+
+                cursor = conn.execute("DELETE FROM face_meta WHERE lychee_face_id NOT IN (SELECT id FROM _keep_ids)")
+                deleted: int = cursor.rowcount
+
+                conn.execute("DROP TABLE IF EXISTS _keep_ids")
+                conn.commit()
+                return deleted
+            finally:
+                conn.close()
+
     def count_by_photo_id(self, photo_id: str) -> int:
         """Count how many faces have been stored for a given photo."""
         conn = self._connect()

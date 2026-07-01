@@ -157,6 +157,40 @@ class PgVectorEmbeddingStore(EmbeddingStore):
             )
         return results
 
+    def delete_except(self, keep_ids: list[str]) -> int:
+        """Delete all embeddings not in keep_ids using a temporary table."""
+        with self._lock:
+            conn = self._get_conn()
+            with conn.cursor() as cur:
+                # Mirror the SQLite approach: populate a temp table so the
+                # NOT IN subquery has no bind-variable limit.
+                cur.execute("CREATE TEMPORARY TABLE IF NOT EXISTS _keep_ids (id TEXT PRIMARY KEY)")
+                cur.execute("DELETE FROM _keep_ids")
+                for i in range(0, max(len(keep_ids), 1), 100):
+                    cur.executemany(
+                        "INSERT INTO _keep_ids(id) VALUES (%s) ON CONFLICT DO NOTHING",
+                        [(fid,) for fid in keep_ids[i : i + 100]],
+                    )
+
+                # Collect IDs to delete first, then remove in chunks.
+                cur.execute(
+                    "SELECT lychee_face_id FROM face_embeddings WHERE lychee_face_id NOT IN (SELECT id FROM _keep_ids)"
+                )
+                rows_to_delete: list[Any] = cur.fetchall()
+                deleted = 0
+                for i in range(0, max(len(rows_to_delete), 1), 100):
+                    chunk = [row[0] for row in rows_to_delete[i : i + 100]]
+                    if chunk:
+                        cur.execute(
+                            "DELETE FROM face_embeddings WHERE lychee_face_id = ANY(%s)",
+                            (chunk,),
+                        )
+                        deleted += cur.rowcount
+
+                cur.execute("DROP TABLE IF EXISTS _keep_ids")
+            conn.commit()
+            return deleted
+
     def count(self) -> int:
         """Return the total number of stored embeddings."""
         with self._lock:
