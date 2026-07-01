@@ -123,3 +123,72 @@ def test_similarity_search_ordered_descending(store: SQLiteEmbeddingStore) -> No
 def test_empty_store_returns_no_results(store: SQLiteEmbeddingStore) -> None:
     results = store.similarity_search(_unit_vec(), threshold=0.0, limit=10)
     assert results == []
+
+
+# ---------------------------------------------------------------------------
+# delete_except
+# ---------------------------------------------------------------------------
+
+
+def test_delete_except_removes_unlisted_embeddings(store: SQLiteEmbeddingStore) -> None:
+    store.add("face-1", _unit_vec(index=0), "photo-1", 100.0, "f1.jpg")
+    store.add("face-2", _unit_vec(index=1), "photo-2", 100.0, "f2.jpg")
+    store.add("face-3", _unit_vec(index=2), "photo-3", 100.0, "f3.jpg")
+
+    deleted = store.delete_except(["face-1", "face-3"])
+
+    assert deleted == 1
+    assert store.count() == 2
+    # face-2 must be gone; face-1 and face-3 must remain
+    remaining = {fid for fid, _ in store.get_all()}
+    assert remaining == {"face-1", "face-3"}
+
+
+def test_delete_except_keeps_all_when_all_listed(store: SQLiteEmbeddingStore) -> None:
+    store.add("face-1", _unit_vec(index=0), "photo-1", 100.0, "f1.jpg")
+    store.add("face-2", _unit_vec(index=1), "photo-2", 100.0, "f2.jpg")
+
+    deleted = store.delete_except(["face-1", "face-2"])
+
+    assert deleted == 0
+    assert store.count() == 2
+
+
+def test_delete_except_deletes_all_when_none_listed(store: SQLiteEmbeddingStore) -> None:
+    store.add("face-1", _unit_vec(index=0), "photo-1", 100.0, "f1.jpg")
+    store.add("face-2", _unit_vec(index=1), "photo-2", 100.0, "f2.jpg")
+
+    deleted = store.delete_except(["face-nonexistent"])
+
+    assert deleted == 2
+    assert store.count() == 0
+
+
+def test_delete_except_on_empty_store_returns_zero(store: SQLiteEmbeddingStore) -> None:
+    deleted = store.delete_except(["face-1"])
+    assert deleted == 0
+
+
+def test_delete_except_is_idempotent(store: SQLiteEmbeddingStore) -> None:
+    store.add("face-1", _unit_vec(index=0), "photo-1", 100.0, "f1.jpg")
+    store.add("face-2", _unit_vec(index=1), "photo-2", 100.0, "f2.jpg")
+
+    store.delete_except(["face-1"])
+    # Second call with same keep list must delete nothing
+    deleted = store.delete_except(["face-1"])
+
+    assert deleted == 0
+    assert store.count() == 1
+
+
+def test_delete_except_handles_large_keep_list(store: SQLiteEmbeddingStore) -> None:
+    """keep_ids list > 999 must not raise (SQLite bind-variable limit guard)."""
+    store.add("face-target", _unit_vec(index=0), "photo-1", 100.0, "f.jpg")
+    # Build a keep list of 1500 fake IDs that do not match anything stored,
+    # plus the real ID so the stored face is retained.
+    large_keep = [f"fake-{i}" for i in range(1500)] + ["face-target"]
+
+    deleted = store.delete_except(large_keep)
+
+    assert deleted == 0
+    assert store.count() == 1
