@@ -249,3 +249,52 @@ def test_face_result_includes_laplacian_variance() -> None:
     payload = face.model_dump()
     assert "laplacian_variance" in payload
     assert payload["laplacian_variance"] == pytest.approx(42.7)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /embeddings/purge
+# ---------------------------------------------------------------------------
+
+
+def test_purge_embeddings_requires_api_key(client: TestClient) -> None:
+    response = client.request("DELETE", "/embeddings/purge", json={"keep_ids": ["face-1"]})
+    assert response.status_code == 422
+
+
+def test_purge_embeddings_rejects_empty_keep_ids(client: TestClient) -> None:
+    response = client.request(
+        "DELETE",
+        "/embeddings/purge",
+        json={"keep_ids": []},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 422
+
+
+def test_purge_embeddings_calls_delete_except(client: TestClient, mock_store: object) -> None:
+    mock_store.delete_except.return_value = 3  # ty: ignore
+
+    response = client.request(
+        "DELETE",
+        "/embeddings/purge",
+        json={"keep_ids": ["face-1", "face-2"]},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"deleted": 3}
+    mock_store.delete_except.assert_called_once_with(["face-1", "face-2"])  # ty: ignore
+
+
+def test_purge_embeddings_returns_zero_when_nothing_deleted(client: TestClient, mock_store: object) -> None:
+    mock_store.delete_except.return_value = 0  # ty: ignore
+
+    response = client.request(
+        "DELETE",
+        "/embeddings/purge",
+        json={"keep_ids": ["face-1"]},
+        headers={"X-API-Key": "test-api-key"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["deleted"] == 0
