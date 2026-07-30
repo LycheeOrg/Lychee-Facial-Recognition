@@ -7,60 +7,111 @@
 
 ## Goal and motivation
 
-Lychee needs a way to synchronise its face database with the AI Vision service after bulk deletions (e.g. album removal, user data purge). The existing `DELETE /embeddings` endpoint deletes a list of known IDs, but requires Lychee to enumerate every ID to remove. A complementary "purge stale" endpoint accepts the complete set of IDs that **should be kept** and deletes everything else, mirroring a `TRUNCATE … WHERE id NOT IN (…)` semantic.
+Lychee needs a way to synchronise its face database with the AI Vision service after bulk deletions (e.g. album removal, user data purge). Because the complete set of surviving face IDs may be arbitrarily large, the sync is split across two phases:
+
+1. **Mark phase** — Lychee sends the surviving IDs in one or more batches via `DELETE /embeddings/sync`. Each embedding is flagged `is_present = TRUE` if its ID appears in any batch, and everything is reset to `FALSE` at the start of the first batch (`batch == 0`).
+2. **Purge phase** — Lychee calls `DELETE /embeddings/purge` once all batches are sent. The service deletes every embedding still flagged `is_present = FALSE`.
+
+This two-step approach avoids constructing a single giant `NOT IN (…)` clause and keeps each individual request small.
 
 ---
 
 ## Scope
 
 ### In scope
-- New `delete_except(keep_ids: list[str]) -> int` method on the `EmbeddingStore` protocol.
-- Implementation in `SQLiteEmbeddingStore` and `PgVectorEmbeddingStore`.
-- New API endpoint (`DELETE /embeddings/purge`) that accepts a list of face IDs to retain and deletes all other embeddings.
-- Schema additions: request model + response model.
-- Route handler implementation.
+- New `is_present` boolean column on both the SQLite and PgVector embedding stores (`DEFAULT TRUE`).
+- New `DELETE /embeddings/sync` endpoint: mark-present batch operation (additive; existing `DELETE /embeddings` is unchanged).
+- New `sync_batch(face_ids: list[str], batch: int) -> int` method on the `EmbeddingStore` protocol.
+- New `DELETE /embeddings/purge` endpoint: deletes all rows where `is_present = FALSE`.
+- New `purge_absent() -> int` method on the `EmbeddingStore` protocol.
+- Schema migrations for both backends (SQLite `ALTER TABLE`, PgVector `ALTER TABLE`).
+- Updated request/response Pydantic models.
+- Route handler implementation for both endpoints.
 - Unit tests for the new route and both store implementations.
 - Documentation update (`docs/3-reference/api.md`).
 
 ### Out of scope
-- Deletion of crop image files from disk (consistent with existing `DELETE /embeddings` behaviour).
+- Deletion of crop image files from disk (consistent with prior behaviour).
 - Async/background execution.
+- Any rollback or undo mechanism if the purge is called prematurely.
 
 ---
 
 ## Functional requirements
 
-1. **FR-1** The endpoint receives a list of `lychee_face_id` strings (`keep_ids`).
-2. **FR-2** All stored embeddings whose `lychee_face_id` is **not** in `keep_ids` are deleted.
-3. **FR-3** The response body contains the count of deleted embeddings (`deleted: int`).
-4. **FR-4** The endpoint is protected by the `X-API-Key` header (same as all other endpoints).
-5. **FR-5** If `keep_ids` is empty the behaviour is determined by Q-001 (see Open Questions).
-6. **FR-6** The endpoint is idempotent: repeating the same request with the same `keep_ids` deletes 0 rows on the second call.
+### `DELETE /embeddings/sync` — Mark-present batch
+
+1. **FR-1** The request body contains `face_ids: list[str]` and `batch: int` (≥ 0).
+2. **FR-2** When `batch == 0`, the service first sets `is_present = FALSE` on **all** stored embeddings, then sets `is_present = TRUE` for every embedding whose `lychee_face_id` appears in `face_ids`.
+3. **FR-3** When `batch > 0`, the service sets `is_present = TRUE` only for the embeddings in `face_ids`; all other rows are left unchanged.
+4. **FR-4** The response body confirms the number of IDs marked present in this batch (`marked: int`).
+5. **FR-5** The endpoint is protected by the `X-API-Key` header.
+6. **FR-6** Sending the same `face_ids` and `batch > 0` again is idempotent (re-sets the same rows to `TRUE`; no error).
+7. **FR-7** `face_ids` may be an empty list. For `batch == 0` this resets all embeddings to `is_present = FALSE` and marks none as present (valid when all faces have been deleted). For `batch > 0` it is a no-op.
+
+### `DELETE /embeddings/purge` — Purge absent embeddings
+
+8. **FR-8** The endpoint accepts no request body.
+9. **FR-9** All embeddings where `is_present = FALSE` are permanently deleted.
+10. **FR-10** The response body contains the count of deleted embeddings (`deleted: int`).
+11. **FR-11** The endpoint is protected by the `X-API-Key` header.
+12. **FR-12** Calling the purge before any batch 0 has been sent is safe: since `is_present` defaults to `TRUE`, no rows will be deleted.
 
 ---
 
 ## Non-functional requirements
 
-- **Security:** Same API-key auth as existing endpoints; no additional surface area.
-- **Performance:** The database may hold up to 1 million embeddings. Loading all IDs into Python memory and diffing them is not acceptable at that scale. The `EmbeddingStore` protocol must gain a native `delete_except(keep_ids)` method so each backend executes the operation close to the database engine.
-  - **SQLite constraint:** `WHERE id NOT IN (?, ?, …)` is limited to `SQLITE_MAX_VARIABLE_NUMBER` bind variables (999 by default). For large keep-sets the `NOT IN` clause would exceed this limit and raise `OperationalError`. The SQLite backend must instead bulk-insert keep IDs into a `TEMPORARY TABLE` (using `executemany`, which has no variable-count limit), then issue a single `DELETE … WHERE id NOT IN (SELECT id FROM _keep_ids)` against that table.
-  - **PostgreSQL:** No equivalent bind-variable limit. Use `DELETE … WHERE lychee_face_id != ALL(%s::text[])` with a native array parameter — a single round-trip, no temp table required.
-- **Backward compatibility:** Additive change only; no existing endpoint or schema is modified.
+- **Security:** Same API-key auth as all existing endpoints; no additional surface area.
+- **Performance:** The database may hold up to 1 million embeddings.
+  - The batch-0 full reset (`UPDATE … SET is_present = FALSE`) touches every row. Both backends must execute this as a single bulk `UPDATE` — no Python-level iteration.
+  - SQLite `UPDATE … SET is_present = TRUE WHERE lychee_face_id IN (?, …)` is limited to `SQLITE_MAX_VARIABLE_NUMBER` (999) bind variables. Large `face_ids` lists must be chunked into batches of ≤ 999 IDs and applied with multiple statements inside a single transaction.
+  - PostgreSQL has no equivalent bind-variable limit. Use `UPDATE … SET is_present = TRUE WHERE lychee_face_id = ANY(%s::text[])` with a native array — a single round-trip.
+- **Backward compatibility:** Additive change only. `DELETE /embeddings` (delete-by-ID) is unchanged. Two new endpoints are added: `DELETE /embeddings/sync` and `DELETE /embeddings/purge`.
+- **Default value:** `is_present` defaults to `TRUE` so that existing embeddings written before the migration do not get purged on the first sync cycle.
 
 ---
 
 ## Data model / API changes
 
-New endpoint only. No store schema changes.
+### Store schema
 
+New column added to both backends:
+
+```sql
+ALTER TABLE embeddings ADD COLUMN is_present BOOLEAN NOT NULL DEFAULT TRUE;
 ```
-DELETE /embeddings/purge
+
+### `EmbeddingStore` protocol additions
+
+```python
+def sync_batch(self, face_ids: list[str], batch: int) -> int:
+    """Mark face_ids as present. If batch == 0, reset all rows first.
+    Returns the number of rows marked TRUE in this call."""
+    ...
+
+
+def purge_absent(self) -> int:
+    """Delete all rows where is_present = FALSE. Returns the deleted count."""
+    ...
 ```
+
+### `DELETE /embeddings/sync` (new)
 
 Request body:
 ```json
-{ "keep_ids": ["face-uuid-1", "face-uuid-2"] }
+{ "face_ids": ["face-uuid-1", "face-uuid-2"], "batch": 0 }
 ```
+
+An empty `face_ids` list is permitted (e.g. `{ "face_ids": [], "batch": 0 }` when all faces have been deleted).
+
+Response body:
+```json
+{ "marked": 2 }
+```
+
+### `DELETE /embeddings/purge` (new)
+
+No request body.
 
 Response body:
 ```json
@@ -75,85 +126,93 @@ See Decision Cards below.
 
 ---
 
-### ❓ Q-001 · Behaviour when `keep_ids` is empty
+### ❓ Q-001 · Behaviour when `face_ids` is empty in a batch request
 
-**Status:** ✅ Resolved — Option A (reject empty list with 422)  
+**Status:** ✅ Resolved — Option B (allow empty list)  
 **Feature:** F-001 – purge-stale-embeddings  
-**Preferred option:** 🅰️ (**recommended**) Option A – Reject with 422  
+**Preferred option:** 🅱️ Option B – Allow empty `face_ids`  
 
 **Question**  
-What should the endpoint do when the caller sends an empty `keep_ids` list? An empty list could mean "delete everything" (valid for a full wipe) or could indicate a caller bug.
+What should `DELETE /embeddings/sync` do when `face_ids` is an empty list?
 
 ---
 
-#### 🅰️ (**recommended**) Option A – Reject empty list with 422
+#### 🅰️ Option A – Reject empty `face_ids` with 422
 
-- **Idea:** Validate `keep_ids` with `min_length=1`; return 422 Unprocessable Entity when the list is empty.
-- **Spec impact:** Callers that want to delete all embeddings must continue using `DELETE /embeddings` (delete all) or a future dedicated endpoint.
+- **Idea:** Validate `face_ids` with `min_length=1`; return 422 Unprocessable Entity when the list is empty.
 - **Pros:**
-  - ✅ Prevents accidental full wipe due to caller bug or serialisation error.
-  - ✅ Consistent with the existing `DeleteEmbeddingsRequest` which also requires `min_length=1`.
-  - ✅ Simpler contract — no extra confirmation flag needed.
+  - ✅ Prevents accidental full wipe caused by a serialisation bug in Lychee.
 - **Cons:**
-  - ❌ Cannot perform a full wipe in a single call; requires a separate flow.
+  - ❌ Lychee cannot express "all faces have been deleted" — a legitimate state that must be representable.
 
 ---
 
-#### 🅱️ Option B – Allow empty list (delete all)
+#### 🅱️ (**chosen**) Option B – Allow empty `face_ids`
 
-- **Idea:** Accept an empty `keep_ids` list and delete all stored embeddings.
-- **Spec impact:** Endpoint becomes a superset of a full-wipe operation.
+- **Idea:** Accept an empty list. For `batch == 0` this resets all rows to `is_present = FALSE` with none marked present (correct when all faces have been deleted). For `batch > 0` it is a no-op.
 - **Pros:**
-  - ✅ Single endpoint covers all sync scenarios.
+  - ✅ Covers the valid "deleted everything" scenario without a separate code path in Lychee.
+  - ✅ Lychee can page through face IDs and send an empty first batch if the DB is already empty.
 - **Cons:**
-  - ❌ One serialisation bug on the Lychee side wipes the entire embedding store.
-  - ❌ No idempotency guard; hard to recover without re-scanning all photos.
+  - ❌ An accidental empty `batch == 0` call marks everything for deletion; the caller must follow up with `DELETE /embeddings/purge` to materialise the wipe.
 
 ---
 
-#### 🅾️ Option C – Allow empty list only with a confirmation flag
+### ❓ Q-002 · Endpoint naming — new endpoint vs. modifying `DELETE /embeddings`
 
-- **Idea:** Add `allow_delete_all: bool = False` to the request. Empty list is accepted only when the flag is `true`.
-- **Spec impact:** More complex request schema; Lychee must opt in explicitly.
-- **Pros:**
-  - ✅ Supports full wipe safely with explicit intent.
-- **Cons:**
-  - ❌ Adds schema complexity for a rare use-case.
-  - ❌ Not needed given `DELETE /embeddings` (or a future `DELETE /embeddings/all`) can cover the wipe case.
-
----
-
-### ❓ Q-002 · HTTP method for the endpoint
-
-**Status:** ✅ Resolved — Option A (`DELETE /embeddings/purge`)  
+**Status:** ✅ Resolved — Option B (new endpoint)  
 **Feature:** F-001 – purge-stale-embeddings  
-**Preferred option:** 🅰️ (**recommended**) Option A – `DELETE /embeddings/purge`  
+**Preferred option:** 🅱️ Option B – New `DELETE /embeddings/sync` endpoint  
 
 **Question**  
-Should the endpoint use `DELETE` (consistent with the existing delete endpoint) or `POST` (more conventional for operations that carry a large body)?
+Should the mark-present logic replace the existing `DELETE /embeddings` endpoint, or live on a new endpoint?
 
 ---
 
-#### 🅰️ (**recommended**) Option A – `DELETE /embeddings/purge`
+#### 🅰️ Option A – Replace `DELETE /embeddings`
 
-- **Idea:** Use the `DELETE` HTTP method with a JSON body, mirroring the existing `DELETE /embeddings`.
-- **Spec impact:** Consistent verb semantics across all embedding-deletion endpoints.
-- **Pros:**
-  - ✅ Consistent with `DELETE /embeddings` which also takes a JSON body.
-  - ✅ Signals destructive intent to readers of the API contract.
-- **Cons:**
-  - ❌ HTTP `DELETE` with a body is valid but some older proxies or clients may strip the body.
+- **Pros:** ✅ Fewer endpoints.
+- **Cons:** ❌ Breaking change; older Lychee clients that call `DELETE /embeddings` to delete specific IDs would silently misbehave.
 
 ---
 
-#### 🅱️ Option B – `POST /embeddings/purge`
+#### 🅱️ (**chosen**) Option B – New `DELETE /embeddings/sync` endpoint
 
-- **Idea:** Use `POST` with a JSON body.
-- **Spec impact:** Mixed HTTP verbs for deletion operations (DELETE for the explicit-delete endpoint, POST for the purge endpoint).
+- **Idea:** Leave `DELETE /embeddings` (delete-by-ID) completely unchanged. Add `DELETE /embeddings/sync` for the mark-present batch operation.
 - **Pros:**
-  - ✅ Universal client compatibility; no proxy issues.
+  - ✅ No breaking change; both deletion workflows coexist.
+  - ✅ Explicit delete-by-ID remains available for targeted operations.
 - **Cons:**
-  - ❌ `POST` is semantically ambiguous — does not communicate that the operation deletes data.
-  - ❌ Inconsistent with the existing `DELETE /embeddings` pattern.
+  - ❌ Slightly more endpoints to maintain.
+
+---
+
+### ❓ Q-003 · Concurrency — overlapping sync sessions
+
+**Status:** ✅ Resolved — Option A (no protection)  
+**Feature:** F-001 – purge-stale-embeddings  
+**Preferred option:** 🅰️ Option A – No protection  
+
+**Question**  
+Should the service guard against two concurrent sync sessions clobbering each other's `is_present` flags?
+
+---
+
+#### 🅰️ (**chosen**) Option A – No protection (document as single-writer assumption)
+
+- **Idea:** Document that the sync workflow is intended to be run as a single sequential operation from Lychee. Concurrent syncs produce undefined results.
+- **Pros:**
+  - ✅ No implementation complexity.
+  - ✅ Matches Lychee's operational model — sync is triggered as one atomic job.
+- **Cons:**
+  - ❌ Silent misbehaviour if the assumption is ever violated.
+
+---
+
+#### 🅱️ Option B – Session token
+
+- **Idea:** `batch == 0` returns a `sync_token`. Subsequent calls require the token; stale tokens are rejected with 409.
+- **Pros:** ✅ Safe under concurrency.
+- **Cons:** ❌ Requires server-side session state; adds a new failure mode.
 
 ---

@@ -36,10 +36,13 @@ from app.api.schemas import (
     HealthResponse,
     MatchResponse,
     MatchResult,
+    PurgeAbsentResponse,
     QueuePositionResponse,
     QueueSizeResponse,
     ServiceConfigResponse,
     SuggestionResult,
+    SyncBatchRequest,
+    SyncBatchResponse,
 )
 from app.clustering.clusterer import FaceClusterer
 from app.config import AppSettings, get_settings
@@ -194,6 +197,51 @@ async def delete_embeddings(
     store: EmbeddingStore = get_store(request)
     deleted = store.delete_many(body.face_ids)
     return DeleteEmbeddingsResponse(deleted=deleted)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /embeddings/sync
+# ---------------------------------------------------------------------------
+
+
+@router.delete("/embeddings/sync")
+async def sync_embeddings(
+    body: SyncBatchRequest,
+    request: Request,
+    _: None = Depends(require_api_key),
+) -> SyncBatchResponse:
+    """Mark a batch of face IDs as present in the current sync session.
+
+    Call with ``batch=0`` to start a new sync session: all stored embeddings
+    are reset to ``is_present=False`` before the supplied IDs are marked.
+    Send subsequent batches with incrementing ``batch`` values to mark
+    more IDs as present.  Finish by calling ``DELETE /embeddings/purge``
+    to remove everything still flagged absent.
+    """
+    store: EmbeddingStore = get_store(request)
+    marked = store.sync_batch(body.face_ids, body.batch)
+    return SyncBatchResponse(marked=marked)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /embeddings/purge
+# ---------------------------------------------------------------------------
+
+
+@router.delete("/embeddings/purge")
+async def purge_embeddings(
+    request: Request,
+    _: None = Depends(require_api_key),
+) -> PurgeAbsentResponse:
+    """Permanently delete all embeddings flagged as absent.
+
+    Deletes every embedding whose ``is_present`` flag is ``False``.
+    Call this after all sync batches have been sent via
+    ``DELETE /embeddings/sync``.
+    """
+    store: EmbeddingStore = get_store(request)
+    deleted = store.purge_absent()
+    return PurgeAbsentResponse(deleted=deleted)
 
 
 @router.get("/embeddings/export")

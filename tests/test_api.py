@@ -249,3 +249,107 @@ def test_face_result_includes_laplacian_variance() -> None:
     payload = face.model_dump()
     assert "laplacian_variance" in payload
     assert payload["laplacian_variance"] == pytest.approx(42.7)
+
+
+# ---------------------------------------------------------------------------
+# DELETE /embeddings/sync
+# ---------------------------------------------------------------------------
+
+
+def test_sync_embeddings_requires_api_key(client: TestClient) -> None:
+    response = client.request(
+        "DELETE",
+        "/embeddings/sync",
+        json={"face_ids": ["face-1"], "batch": 0},
+    )
+    assert response.status_code == 422  # missing X-API-Key header
+
+
+def test_sync_embeddings_batch_0(client: TestClient, mock_store: object) -> None:
+    """batch=0 must call sync_batch and return marked count."""
+    mock_store.sync_batch.return_value = 2  # ty: ignore
+
+    response = client.request(
+        "DELETE",
+        "/embeddings/sync",
+        json={"face_ids": ["face-1", "face-2"], "batch": 0},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"marked": 2}
+    mock_store.sync_batch.assert_called_once_with(["face-1", "face-2"], 0)  # ty: ignore
+
+
+def test_sync_embeddings_batch_nonzero(client: TestClient, mock_store: object) -> None:
+    """batch>0 must forward the correct batch index to sync_batch."""
+    mock_store.sync_batch.return_value = 1  # ty: ignore
+
+    response = client.request(
+        "DELETE",
+        "/embeddings/sync",
+        json={"face_ids": ["face-1"], "batch": 3},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"marked": 1}
+    mock_store.sync_batch.assert_called_once_with(["face-1"], 3)  # ty: ignore
+
+
+def test_sync_embeddings_empty_face_ids_allowed(client: TestClient, mock_store: object) -> None:
+    """An empty face_ids list must be accepted (valid when all faces deleted)."""
+    mock_store.sync_batch.return_value = 0  # ty: ignore
+
+    response = client.request(
+        "DELETE",
+        "/embeddings/sync",
+        json={"face_ids": [], "batch": 0},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"marked": 0}
+
+
+def test_sync_embeddings_negative_batch_rejected(client: TestClient) -> None:
+    """batch < 0 must be rejected with 422."""
+    response = client.request(
+        "DELETE",
+        "/embeddings/sync",
+        json={"face_ids": [], "batch": -1},
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# DELETE /embeddings/purge
+# ---------------------------------------------------------------------------
+
+
+def test_purge_embeddings_requires_api_key(client: TestClient) -> None:
+    response = client.delete("/embeddings/purge")
+    assert response.status_code == 422  # missing header
+
+
+def test_purge_embeddings_returns_deleted_count(client: TestClient, mock_store: object) -> None:
+    """DELETE /embeddings/purge must call purge_absent and return deleted count."""
+    mock_store.purge_absent.return_value = 42  # ty: ignore
+
+    response = client.delete(
+        "/embeddings/purge",
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"deleted": 42}
+    mock_store.purge_absent.assert_called_once()  # ty: ignore
+
+
+def test_purge_embeddings_zero_when_all_present(client: TestClient, mock_store: object) -> None:
+    """If nothing is absent, purge must return deleted=0."""
+    mock_store.purge_absent.return_value = 0  # ty: ignore
+
+    response = client.delete(
+        "/embeddings/purge",
+        headers={"X-API-Key": "test-api-key"},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"deleted": 0}

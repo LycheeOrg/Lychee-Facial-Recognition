@@ -211,6 +211,58 @@ IDs not found in the store are silently skipped.
 
 ---
 
+## `DELETE /embeddings/sync`
+
+Mark a batch of face IDs as present in the current sync session. Part of the two-step sync-then-purge protocol for bulk reconciliation.
+
+**Workflow:**
+1. Send `batch=0` with the first slice of surviving face IDs. This resets every stored embedding to `is_present=false`, then marks the supplied IDs as `true`.
+2. Send `batch=1`, `batch=2`, … with subsequent slices. Each call only marks its IDs as `true`; everything else is left unchanged.
+3. Call `DELETE /embeddings/purge` to permanently delete all embeddings still marked absent.
+
+**Request body (JSON)**
+
+```json
+{"face_ids": ["123", "456"], "batch": 0}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `face_ids` | string[] | Face IDs to mark as present. May be empty (e.g. when all faces have been deleted). |
+| `batch` | int (≥ 0) | Batch index. `0` triggers a full reset before marking. |
+
+**Response `200`**
+
+```json
+{"marked": 2}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `marked` | int | Number of embeddings marked present in this batch. |
+
+---
+
+## `DELETE /embeddings/purge`
+
+Permanently delete all embeddings flagged as absent (`is_present=false`). Call this after all sync batches have been sent via `DELETE /embeddings/sync`.
+
+**Request body** — none.
+
+**Response `200`**
+
+```json
+{"deleted": 42}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `deleted` | int | Number of embeddings permanently removed. `0` if everything was already present. |
+
+Calling this endpoint before any `batch=0` sync call is safe — all embeddings default to `is_present=true`, so nothing will be deleted.
+
+---
+
 ## `GET /embeddings/export`
 
 Export all stored embeddings with metadata. Used by Lychee for re-synchronisation after callback failures.
