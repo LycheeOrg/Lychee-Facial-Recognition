@@ -36,8 +36,6 @@ from app.api.schemas import (
     HealthResponse,
     MatchResponse,
     MatchResult,
-    PurgeEmbeddingsRequest,
-    PurgeEmbeddingsResponse,
     QueuePositionResponse,
     QueueSizeResponse,
     ServiceConfigResponse,
@@ -196,23 +194,6 @@ async def delete_embeddings(
     store: EmbeddingStore = get_store(request)
     deleted = store.delete_many(body.face_ids)
     return DeleteEmbeddingsResponse(deleted=deleted)
-
-
-@router.delete("/embeddings/purge")
-async def purge_embeddings(
-    body: PurgeEmbeddingsRequest,
-    request: Request,
-    _: None = Depends(require_api_key),
-) -> PurgeEmbeddingsResponse:
-    """Delete all embeddings whose Face ID is not in the provided keep list.
-
-    Called by Lychee during bulk synchronisation to remove embeddings for faces
-    that no longer exist on the Lychee side. Returns the number of embeddings
-    deleted. Embeddings whose IDs are in ``keep_ids`` are left untouched.
-    """
-    store: EmbeddingStore = get_store(request)
-    deleted = store.delete_except(body.keep_ids)
-    return PurgeEmbeddingsResponse(deleted=deleted)
 
 
 @router.get("/embeddings/export")
