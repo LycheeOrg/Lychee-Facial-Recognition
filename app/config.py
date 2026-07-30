@@ -146,7 +146,7 @@ class AppSettings(BaseSettings):
     """Uvicorn/application log level."""
 
     # --- Clustering ---
-    cluster_eps: float = 0.6
+    cluster_eps: float = 0.3
     """DBSCAN epsilon (max cosine distance) for face clustering.
     Lower values produce tighter, more homogeneous clusters."""
 

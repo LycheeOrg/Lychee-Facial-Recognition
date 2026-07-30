@@ -39,7 +39,7 @@ All environment variables use the `VISION_FACE_` prefix. Copy `.env.example` to 
 |---|---|---|
 | `VISION_FACE_MATCH_THRESHOLD` | `0.5` | Cosine-similarity cutoff for detection suggestions and selfie matching results. |
 | `VISION_FACE_RESCAN_IOU_THRESHOLD` | `0.5` | IoU threshold for bounding-box matching when re-scanning a photo (preserves existing `person_id`). |
-| `VISION_FACE_CLUSTER_EPS` | `0.6` | DBSCAN maximum cosine distance (`1 − similarity`) for two faces to be neighbours. |
+| `VISION_FACE_CLUSTER_EPS` | `0.3` | DBSCAN maximum cosine distance (`1 − similarity`) for two faces to be neighbours. |
 
 ## Storage
 
