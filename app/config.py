@@ -146,7 +146,7 @@ class AppSettings(BaseSettings):
     """Uvicorn/application log level."""
 
     # --- Clustering ---
-    cluster_eps: float = 0.6
+    cluster_eps: float = 0.3
     """DBSCAN epsilon (max cosine distance) for face clustering.
     Lower values produce tighter, more homogeneous clusters."""
 
@@ -200,6 +200,8 @@ class AppSettings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",  # Ignore extra fields (e.g., from Lychee's .env when running from main project)
+        secrets_dir="/run/secrets",  # Docker secrets support: mount secrets as files
+        # under /run/secrets/vision_face_<field>
     )
 
     def to_diagnostics_payload(self) -> dict[str, str]:

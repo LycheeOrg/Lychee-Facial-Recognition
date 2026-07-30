@@ -44,7 +44,7 @@ Current runtime configuration with secrets redacted.
     "detection_threshold": "0.5",
     "match_threshold": "0.5",
     "blur_threshold": "0.5",
-    "cluster_eps": "0.6",
+    "cluster_eps": "0.3",
     "max_faces_per_photo": "10",
     "min_face_size_pixels": "0",
     "rescan_iou_threshold": "0.5",
