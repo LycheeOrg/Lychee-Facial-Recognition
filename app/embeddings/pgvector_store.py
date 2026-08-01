@@ -166,6 +166,33 @@ class PgVectorEmbeddingStore(EmbeddingStore):
                 row: Any = cur.fetchone()
         return int(row[0]) if row else 0
 
+    def sync_batch(self, face_ids: list[str], batch: int) -> int:
+        """Mark face IDs as present; optionally reset all rows first (batch == 0)."""
+        with self._lock:
+            conn = self._get_conn()
+            with conn.cursor() as cur:
+                if batch == 0:
+                    cur.execute("UPDATE face_embeddings SET is_present = FALSE")
+                marked = 0
+                if face_ids:
+                    cur.execute(
+                        "UPDATE face_embeddings SET is_present = TRUE WHERE lychee_face_id = ANY(%s)",
+                        (face_ids,),
+                    )
+                    marked = cur.rowcount
+            conn.commit()
+        return marked
+
+    def purge_absent(self) -> int:
+        """Delete all rows where is_present = FALSE."""
+        with self._lock:
+            conn = self._get_conn()
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM face_embeddings WHERE is_present = FALSE")
+                deleted: int = cur.rowcount
+            conn.commit()
+        return deleted
+
     # ------------------------------------------------------------------
     # Internal helpers
     # ------------------------------------------------------------------
@@ -202,6 +229,13 @@ class PgVectorEmbeddingStore(EmbeddingStore):
                     CREATE INDEX IF NOT EXISTS face_embeddings_embedding_cosine_idx
                     ON face_embeddings USING ivfflat (embedding vector_cosine_ops)
                     WITH (lists = 100)
+                    """
+                )
+                # Migration: add is_present column if it does not yet exist.
+                cur.execute(
+                    """
+                    ALTER TABLE face_embeddings
+                    ADD COLUMN IF NOT EXISTS is_present BOOLEAN NOT NULL DEFAULT TRUE
                     """
                 )
             conn.commit()

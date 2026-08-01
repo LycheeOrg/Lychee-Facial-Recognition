@@ -123,3 +123,89 @@ def test_similarity_search_ordered_descending(store: SQLiteEmbeddingStore) -> No
 def test_empty_store_returns_no_results(store: SQLiteEmbeddingStore) -> None:
     results = store.similarity_search(_unit_vec(), threshold=0.0, limit=10)
     assert results == []
+
+
+# ---------------------------------------------------------------------------
+# sync_batch / purge_absent
+# ---------------------------------------------------------------------------
+
+
+def test_sync_batch_0_resets_and_marks(store: SQLiteEmbeddingStore) -> None:
+    """batch=0 should reset all rows then mark the supplied IDs as present."""
+    store.add("face-1", _unit_vec(index=0), "photo-1", 100.0, "c1.jpg")
+    store.add("face-2", _unit_vec(index=1), "photo-2", 100.0, "c2.jpg")
+    store.add("face-3", _unit_vec(index=2), "photo-3", 100.0, "c3.jpg")
+
+    marked = store.sync_batch(["face-1", "face-2"], batch=0)
+
+    assert marked == 2
+    # purge removes face-3 only
+    deleted = store.purge_absent()
+    assert deleted == 1
+    assert store.count() == 2
+
+
+def test_sync_batch_0_empty_face_ids_marks_all_absent(store: SQLiteEmbeddingStore) -> None:
+    """batch=0 with empty list resets all rows; subsequent purge removes everything."""
+    store.add("face-1", _unit_vec(index=0), "photo-1", 100.0, "c1.jpg")
+    store.add("face-2", _unit_vec(index=1), "photo-2", 100.0, "c2.jpg")
+
+    marked = store.sync_batch([], batch=0)
+    assert marked == 0
+
+    deleted = store.purge_absent()
+    assert deleted == 2
+    assert store.count() == 0
+
+
+def test_sync_batch_nonzero_only_marks_given_ids(store: SQLiteEmbeddingStore) -> None:
+    """batch>0 must only set is_present=True for the supplied IDs."""
+    store.add("face-1", _unit_vec(index=0), "photo-1", 100.0, "c1.jpg")
+    store.add("face-2", _unit_vec(index=1), "photo-2", 100.0, "c2.jpg")
+
+    # Start a session: reset all, mark face-1
+    store.sync_batch(["face-1"], batch=0)
+    # Add face-2 in a later batch
+    marked = store.sync_batch(["face-2"], batch=1)
+    assert marked == 1
+
+    # Nothing should be purged: both are marked present
+    deleted = store.purge_absent()
+    assert deleted == 0
+    assert store.count() == 2
+
+
+def test_purge_absent_safe_when_all_present(store: SQLiteEmbeddingStore) -> None:
+    """Calling purge before any sync (all rows default to is_present=1) removes nothing."""
+    store.add("face-1", _unit_vec(index=0), "photo-1", 100.0, "c1.jpg")
+
+    deleted = store.purge_absent()
+    assert deleted == 0
+    assert store.count() == 1
+
+
+def test_sync_batch_idempotent(store: SQLiteEmbeddingStore) -> None:
+    """Sending the same batch=1 request twice must not raise or double-count."""
+    store.add("face-1", _unit_vec(index=0), "photo-1", 100.0, "c1.jpg")
+    store.sync_batch([], batch=0)  # reset all
+
+    store.sync_batch(["face-1"], batch=1)
+    marked = store.sync_batch(["face-1"], batch=1)  # repeat
+    assert marked == 1  # rowcount reflects rows touched, not newly changed
+
+    deleted = store.purge_absent()
+    assert deleted == 0
+
+
+def test_purge_absent_removes_vec_rows(store: SQLiteEmbeddingStore) -> None:
+    """purge_absent must clean up vec_faces as well as face_meta."""
+    store.add("face-1", _unit_vec(index=0), "photo-1", 100.0, "c1.jpg")
+    store.add("face-2", _unit_vec(index=1), "photo-2", 100.0, "c2.jpg")
+
+    store.sync_batch(["face-1"], batch=0)
+    store.purge_absent()
+
+    # After purge, similarity search should only find face-1
+    results = store.similarity_search(_unit_vec(index=0), threshold=0.9, limit=10)
+    assert len(results) == 1
+    assert results[0][0] == "face-1"

@@ -109,6 +109,31 @@ class EmbeddingStore(Protocol):
         """
         ...
 
+    def sync_batch(self, face_ids: list[str], batch: int) -> int:
+        """Mark a batch of face IDs as present in the current sync session.
+
+        When ``batch == 0`` all stored embeddings are first reset to
+        ``is_present = False``; the supplied ``face_ids`` are then marked
+        ``True``.  For ``batch > 0`` only the supplied IDs are marked ``True``;
+        all other rows are left unchanged.
+
+        Args:
+            face_ids: Lychee ``Face.id`` strings to mark as present.
+            batch: Batch index.  0 triggers a full reset before marking.
+
+        Returns:
+            Number of rows actually marked ``True`` in this call.
+        """
+        ...
+
+    def purge_absent(self) -> int:
+        """Permanently delete all embeddings flagged ``is_present = False``.
+
+        Returns:
+            Number of embeddings deleted.
+        """
+        ...
+
     def count(self) -> int:
         """Return the total number of stored embeddings."""
         ...

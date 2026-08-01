@@ -169,6 +169,45 @@ class DeleteEmbeddingsResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# DELETE /embeddings/sync - Lychee -> Python
+# ---------------------------------------------------------------------------
+
+
+class SyncBatchRequest(BaseModel):
+    """Body sent by Lychee for one batch of the mark-present sync protocol."""
+
+    face_ids: list[str]
+    """Lychee ``Face.id`` values to mark as present in this batch.
+
+    May be empty (e.g. ``batch == 0`` when all faces have been deleted).
+    """
+
+    batch: int = Field(ge=0)
+    """Batch index.  0 triggers a full reset of all ``is_present`` flags before
+    marking the supplied IDs.  Subsequent batches only mark their IDs.
+    """
+
+
+class SyncBatchResponse(BaseModel):
+    """Response body for ``DELETE /embeddings/sync``."""
+
+    marked: int
+    """Number of embeddings marked present in this batch."""
+
+
+# ---------------------------------------------------------------------------
+# DELETE /embeddings/purge - Lychee -> Python
+# ---------------------------------------------------------------------------
+
+
+class PurgeAbsentResponse(BaseModel):
+    """Response body for ``DELETE /embeddings/purge``."""
+
+    deleted: int
+    """Number of embeddings permanently deleted (those flagged ``is_present = False``)."""
+
+
+# ---------------------------------------------------------------------------
 # POST /cluster - Lychee -> Python
 # ---------------------------------------------------------------------------
 

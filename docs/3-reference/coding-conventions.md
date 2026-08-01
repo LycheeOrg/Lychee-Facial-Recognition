@@ -76,8 +76,7 @@ Apply `@typing.override` when overriding a base class or protocol method:
 ```python
 class _ColorFormatter(logging.Formatter):
     @typing.override
-    def format(self, record: logging.LogRecord) -> str:
-        ...
+    def format(self, record: logging.LogRecord) -> str: ...
 ```
 
 ## Naming
@@ -102,6 +101,7 @@ Use a single-line docstring when the purpose is obvious from the name and signat
 ```python
 def count(self) -> int:
     """Return the total number of stored embeddings."""
+
 
 def detect(self, image_path: Path) -> list[DetectedFace]:
     """Detect faces in an image file.
@@ -144,6 +144,7 @@ All settings live in `app/config.py` as a `pydantic-settings` `AppSettings` mode
 # correct
 async def detect(settings: AppSettings = Depends(get_settings)) -> None:
     threshold = settings.detection_threshold
+
 
 # wrong
 threshold = float(os.environ["VISION_FACE_DETECTION_THRESHOLD"])

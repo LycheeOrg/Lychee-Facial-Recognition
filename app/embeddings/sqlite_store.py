@@ -21,6 +21,9 @@ from app.embeddings.store import EmbeddingStore
 _EMBEDDING_DIM = 512
 """ArcFace (buffalo_l) embedding dimension."""
 
+_SQLITE_MAX_VARS = 999
+"""Maximum SQLite bind variables per statement (SQLITE_MAX_VARIABLE_NUMBER default)."""
+
 
 def _to_blob(embedding: list[float]) -> bytes:
     """Serialise a float list to a little-endian float32 byte blob."""
@@ -245,6 +248,10 @@ class SQLiteEmbeddingStore(EmbeddingStore):
                     )
                     """
                 )
+                # Migration: add is_present column if it does not yet exist.
+                columns = {row[1] for row in conn.execute("PRAGMA table_info(face_meta)")}
+                if "is_present" not in columns:
+                    conn.execute("ALTER TABLE face_meta ADD COLUMN is_present INTEGER NOT NULL DEFAULT 1")
                 conn.commit()
             finally:
                 conn.close()
@@ -258,3 +265,46 @@ class SQLiteEmbeddingStore(EmbeddingStore):
         if row is not None:
             conn.execute("DELETE FROM vec_faces WHERE rowid = ?", [row[0]])
             conn.execute("DELETE FROM face_meta WHERE lychee_face_id = ?", [lychee_face_id])
+
+    def sync_batch(self, face_ids: list[str], batch: int) -> int:
+        """Mark face IDs as present; optionally reset all rows first (batch == 0)."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                if batch == 0:
+                    conn.execute("UPDATE face_meta SET is_present = 0")
+                marked = 0
+                if face_ids:
+                    marked = self._mark_present_chunked(conn, face_ids)
+                conn.commit()
+                return marked
+            finally:
+                conn.close()
+
+    def purge_absent(self) -> int:
+        """Delete all rows where is_present = 0 from both tables."""
+        with self._lock:
+            conn = self._connect()
+            try:
+                conn.execute(
+                    "DELETE FROM vec_faces WHERE rowid IN (SELECT vec_rowid FROM face_meta WHERE is_present = 0)"
+                )
+                cursor = conn.execute("DELETE FROM face_meta WHERE is_present = 0")
+                deleted: int = cursor.rowcount
+                conn.commit()
+                return deleted
+            finally:
+                conn.close()
+
+    def _mark_present_chunked(self, conn: sqlite3.Connection, face_ids: list[str]) -> int:
+        """UPDATE is_present = 1 in chunks of _SQLITE_MAX_VARS to avoid bind-var limits."""
+        marked = 0
+        for i in range(0, len(face_ids), _SQLITE_MAX_VARS):
+            chunk = face_ids[i : i + _SQLITE_MAX_VARS]
+            placeholders = ",".join("?" * len(chunk))
+            cursor = conn.execute(
+                f"UPDATE face_meta SET is_present = 1 WHERE lychee_face_id IN ({placeholders})",
+                chunk,
+            )
+            marked += cursor.rowcount
+        return marked
