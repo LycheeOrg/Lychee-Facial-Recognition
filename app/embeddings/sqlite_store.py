@@ -14,7 +14,6 @@ from __future__ import annotations
 import sqlite3
 import struct
 import threading
-from contextlib import suppress
 from pathlib import Path
 
 from app.embeddings.store import EmbeddingStore
@@ -250,7 +249,8 @@ class SQLiteEmbeddingStore(EmbeddingStore):
                     """
                 )
                 # Migration: add is_present column if it does not yet exist.
-                with suppress(sqlite3.OperationalError):
+                columns = {row[1] for row in conn.execute("PRAGMA table_info(face_meta)")}
+                if "is_present" not in columns:
                     conn.execute("ALTER TABLE face_meta ADD COLUMN is_present INTEGER NOT NULL DEFAULT 1")
                 conn.commit()
             finally:
