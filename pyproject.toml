@@ -33,7 +33,7 @@ gpu = ["tensorflow[and-cuda]"]
 [dependency-groups]
 dev = [
     "ruff>=0.16.0",
-    "ty>=0.0.64",
+    "ty>=0.0.65",
     "pytest>=9.1.1",
     "pytest-cov>=6.0",
     "pytest-asyncio>=1.4.0",
