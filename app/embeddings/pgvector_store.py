@@ -166,6 +166,18 @@ class PgVectorEmbeddingStore(EmbeddingStore):
                 row: Any = cur.fetchone()
         return int(row[0]) if row else 0
 
+    def count_by_photo_id(self, photo_id: str) -> int:
+        """Count how many faces have been stored for a given photo."""
+        with self._lock:
+            conn = self._get_conn()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) FROM face_embeddings WHERE photo_id = %s",
+                    (photo_id,),
+                )
+                row: Any = cur.fetchone()
+        return int(row[0]) if row else 0
+
     def sync_batch(self, face_ids: list[str], batch: int) -> int:
         """Mark face IDs as present; optionally reset all rows first (batch == 0)."""
         with self._lock:
