@@ -12,6 +12,7 @@ from app.queue.worker import _maybe_dispatch_clustering
 
 if TYPE_CHECKING:
     from app.queue.base import JobQueue
+    from app.queue.db_queue import SQLiteJobQueue
 
 
 # ---------------------------------------------------------------------------
@@ -73,13 +74,13 @@ async def test_does_not_enqueue_when_queue_not_idle(queue: AsyncMock, settings_e
 
 
 @pytest.fixture
-def sqlite_queue(tmp_path: pytest.TempPathFactory) -> AsyncMock:
+def sqlite_queue(tmp_path: pytest.TempPathFactory) -> SQLiteJobQueue:
     from app.queue.db_queue import SQLiteJobQueue
 
     return SQLiteJobQueue(str(tmp_path), max_size=10)
 
 
-async def test_enqueue_if_idle_succeeds_on_empty_queue(sqlite_queue: AsyncMock) -> None:
+async def test_enqueue_if_idle_succeeds_on_empty_queue(sqlite_queue: SQLiteJobQueue) -> None:
     result = await sqlite_queue.enqueue_if_idle("cluster", "", "{}")
     assert result is True
     assert await sqlite_queue.size() == 1
@@ -88,14 +89,14 @@ async def test_enqueue_if_idle_succeeds_on_empty_queue(sqlite_queue: AsyncMock) 
     assert job.job_type == "cluster"
 
 
-async def test_enqueue_if_idle_rejected_when_pending_job_exists(sqlite_queue: AsyncMock) -> None:
+async def test_enqueue_if_idle_rejected_when_pending_job_exists(sqlite_queue: SQLiteJobQueue) -> None:
     await sqlite_queue.enqueue("detect", "photo-1", "{}")
 
     result = await sqlite_queue.enqueue_if_idle("cluster", "", "{}")
     assert result is False
 
 
-async def test_enqueue_if_idle_rejected_when_inflight_job_exists(sqlite_queue: AsyncMock) -> None:
+async def test_enqueue_if_idle_rejected_when_inflight_job_exists(sqlite_queue: SQLiteJobQueue) -> None:
     await sqlite_queue.enqueue("detect", "photo-1", "{}")
     await sqlite_queue.dequeue()  # moves to processing
 
