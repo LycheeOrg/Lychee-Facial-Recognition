@@ -5,7 +5,7 @@
 # Targeted by CI (target: builder) to verify the build without downloading
 # the 300 MB model weights.
 # ---------------------------------------------------------------------------
-FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS builder
+FROM python:3.15-slim@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913 AS builder
 
 # Install uv from the official image.
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
@@ -46,7 +46,7 @@ RUN DEEPFACE_HOME=/root/.deepface uv run python -c \
 # ---------------------------------------------------------------------------
 # Stage 3 – runtime: copy only what's needed to run.
 # ---------------------------------------------------------------------------
-FROM python:3.14-slim@sha256:44dd04494ee8f3b538294360e7c4b3acb87c8268e4d0a4828a6500b1eff50061 AS runtime
+FROM python:3.15-slim@sha256:94d3426f1def7db4a106a232ac121bfd975393e5dfd40a619b955fae45fe7913 AS runtime
 
 # Same runtime libraries as the builder stage (not inherited in a multi-stage build).
 RUN apt-get update && apt-get install -y --no-install-recommends \
