@@ -5,7 +5,7 @@ Read it before exploring the codebase or proposing any changes.
 
 ## Repository at a glance
 
-- **Language:** Python 3.13
+- **Language:** Python 3.14
 - **Framework:** FastAPI + Uvicorn
 - **Purpose:** Facial recognition microservice for the [Lychee](https://github.com/LycheeOrg/Lychee) photo gallery
 - **Key docs:** [`docs/`](docs/) — start with [`docs/0-overview/README.md`](docs/0-overview/README.md)

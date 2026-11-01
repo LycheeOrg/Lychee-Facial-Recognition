@@ -4,7 +4,7 @@ This document describes the coding standards enforced in this project. All rules
 
 ## Python version
 
-**Python 3.13** is the only supported version (`requires-python = ">=3.13,<3.14"`). Use modern syntax freely: `match`, `Self`, `TypeAlias`, `ExceptionGroup`, built-in generics, etc.
+**Python 3.14** is the only supported version (`requires-python = ">=3.14,<3.15"`). Use modern syntax freely: `match`, `Self`, `TypeAlias`, `ExceptionGroup`, built-in generics, etc.
 
 ## Tooling
 
