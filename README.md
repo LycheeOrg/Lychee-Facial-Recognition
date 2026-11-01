@@ -107,7 +107,7 @@ All variables are prefixed `VISION_FACE_`. Copy `.env.example` to `.env` and fil
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VISION_FACE_MODEL_NAME` | `ArcFace` | DeepFace recognition model |
-| `VISION_FACE_DETECTOR_BACKEND` | `retinaface` | DeepFace detector backend (`retinaface`, `mtcnn`, `opencv`, `ssd`) |
+| `VISION_FACE_DETECTOR_BACKEND` | `retinaface` | DeepFace detector backend (`retinaface`; other backends are not supported with the current dependencies) |
 | `VISION_FACE_MODEL_ROOT` | `/root/.deepface` | Root directory for DeepFace model weights (`DEEPFACE_HOME`) |
 
 ### Detection & matching

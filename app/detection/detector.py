@@ -87,6 +87,7 @@ class FaceDetector:
                 enforce_detection=False,
             )
             self._loaded = True
+            logger.info("DeepFace model %s loaded on the %s backend engine", self._model_name, DeepFace.backend_engine)
 
     @property
     def is_loaded(self) -> bool:

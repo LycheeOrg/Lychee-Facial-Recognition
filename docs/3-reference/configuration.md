@@ -21,7 +21,7 @@ All environment variables use the `VISION_FACE_` prefix. Copy `.env.example` to 
 | Variable | Default | Description |
 |---|---|---|
 | `VISION_FACE_MODEL_NAME` | `ArcFace` | DeepFace recognition model. `ArcFace` produces 512-dimensional embeddings. Other options: `Facenet512`, `VGG-Face`. |
-| `VISION_FACE_DETECTOR_BACKEND` | `retinaface` | DeepFace detector backend. Options: `retinaface`, `mtcnn`, `opencv`, `ssd`. |
+| `VISION_FACE_DETECTOR_BACKEND` | `retinaface` | DeepFace detector backend. Only `retinaface` is supported with the current dependencies. |
 | `VISION_FACE_MODEL_ROOT` | `/root/.deepface` | Directory for cached DeepFace model weights. Exposed as `DEEPFACE_HOME` at startup. |
 
 ## Detection & quality

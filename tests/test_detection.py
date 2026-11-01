@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
@@ -102,6 +103,23 @@ def test_load_is_idempotent() -> None:
 def test_is_loaded_false_before_load() -> None:
     detector = FaceDetector()
     assert not detector.is_loaded
+
+
+def test_load_logs_backend_engine(caplog: pytest.LogCaptureFixture) -> None:
+    """load() should log which DeepFace backend engine runs the model."""
+    stub_deepface_mod = MagicMock()
+    stub_deepface_mod.DeepFace.backend_engine = "onnx"
+
+    detector = FaceDetector(model_name="ArcFace")
+    with (
+        patch.dict(sys.modules, {"deepface": stub_deepface_mod}),
+        caplog.at_level(logging.INFO, logger="app.detection.detector"),
+    ):
+        detector.load()
+
+    assert detector.is_loaded
+    assert "ArcFace" in caplog.text
+    assert "onnx" in caplog.text
 
 
 # ---------------------------------------------------------------------------

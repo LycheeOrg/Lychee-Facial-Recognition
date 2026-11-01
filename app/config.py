@@ -87,8 +87,8 @@ class AppSettings(BaseSettings):
     other supported models include ``Facenet512``, ``VGG-Face``, etc."""
 
     detector_backend: str = "retinaface"
-    """DeepFace detector backend.  ``retinaface`` = high-accuracy (default);
-    alternatives include ``mtcnn``, ``opencv``, ``ssd``."""
+    """DeepFace detector backend.  ``retinaface`` = high-accuracy (default); it is the only
+    backend that works with the current dependency set."""
 
     # --- Detection thresholds ---
     detection_threshold: float = 0.5
