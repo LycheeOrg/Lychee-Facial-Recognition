@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.14.*"
 resolution-markers = [
     "sys_platform == 'win32'",
@@ -257,7 +257,7 @@ wheels = [
 
 [[package]]
 name = "deepface"
-version = "0.0.103"
+version = "0.0.104"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "gdown" },
@@ -269,9 +269,9 @@ dependencies = [
     { name = "retina-face" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ca/95/130add07c12d7aff6259b624784204e7a9be472ca629bc5501bc57e36c54/deepface-0.0.103.tar.gz", hash = "sha256:c9062fb26cf96ebf9b6e9b77f81df348ba287cb7069d2edff6b8342caf465b7b", size = 197538, upload-time = "2026-10-20T16:06:37.316Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/83/a7/b6279c833bc4fdbce6d3334e6b338fc6a58d9aaf82a6a9476e0fcda9466b/deepface-0.0.104.tar.gz", hash = "sha256:5cd52868dc42959bb821fa94710acdd0c2a4c725dcadb3cbf3b43dad340b2e92", size = 204138, upload-time = "2026-11-04T18:24:57.045Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9d/9e/95e06e9d36960a21e1cd2d6259dcd8a9248309704ede68192f4147681e97/deepface-0.0.103-py3-none-any.whl", hash = "sha256:9f56eceb3c564fe0ac4a69911cd7b489bde8a8f591061b382c55b807e03f0e1a", size = 289801, upload-time = "2026-10-20T16:06:35.863Z" },
+    { url = "https://files.pythonhosted.org/packages/23/44/f1b36434723735aea05a4456122c39c50b048a7a7ab9128efc4266144749/deepface-0.0.104-py3-none-any.whl", hash = "sha256:d532a57753089e3d2abd09829537bdf7c8d1a9cbb09c70af7c93003a96f2e279", size = 300240, upload-time = "2026-11-04T18:24:55.33Z" },
 ]
 
 [[package]]
